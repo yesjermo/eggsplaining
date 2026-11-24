@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#efe9fb" />
+    <meta name="description" content="Hold to pump a very nervous egg. Let go to bank. Don’t pop her. Compare scores with the whole world." />
+    <meta property="og:title" content="Eggsplaining" />
+    <meta property="og:description" content="Hold. Let go. Don’t pop her." />
+    <meta property="og:image" content="/splash.gif" />
+    <title>Eggsplaining</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2C10 2 5 12 5 19a11 11 0 0 0 22 0C27 12 22 2 16 2z' fill='%23f6d3b8' stroke='%232b2232' stroke-width='2'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <canvas id="stage" aria-hidden="true"></canvas>
+
+    <!-- ============ splash ============ -->
+    <section id="splash" class="screen" aria-labelledby="splash-title">
+      <canvas id="splash-art" aria-hidden="true"></canvas>
+      <div class="splash-ui">
+        <h1 id="splash-title">Eggsplaining</h1>
+        <p class="tagline">Hold to pump her up. Let go to bank. Don’t pop her.</p>
+        <div class="modes">
+          <button class="mode glass" data-mode="classic">
+            <span class="mode-name">Play</span>
+            <span class="mode-sub">One egg, one pop. How far can you push her?</span>
+            <span class="mode-best" data-best="classic"></span>
+          </button>
+          <button class="mode glass hot" data-mode="blitz">
+            <span class="mode-name">ADHD mode</span>
+            <span class="mode-sub">45 seconds. Faster. Combos. Pops just cost time.</span>
+            <span class="mode-best" data-best="blitz"></span>
+          </button>
+        </div>
+        <div class="splash-links">
+          <button class="pill glass" id="btn-board">
+            <svg viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z" /><path d="M7 6H4.5a2.5 2.5 0 0 0 3 3M17 6h2.5a2.5 2.5 0 0 1-3 3M12 13v4M8.5 20h7l-1-3h-5z" /></svg>
+            World leaderboard
+          </button>
+          <button class="pill glass" id="btn-make">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="4.5" /><path d="M4.5 20c1.4-3.6 4.2-5.4 7.5-5.4s6.1 1.8 7.5 5.4" /></svg>
+            Make her yours
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ game HUD ============ -->
+    <section id="hud" class="screen" hidden>
+      <header class="top">
+        <div class="score glass">
+          <span class="score-label">Score</span>
+          <b id="score">0</b>
+          <span class="score-best" id="best"></span>
+        </div>
+        <div class="blitz glass" id="blitz" hidden>
+          <span class="time" id="time">45</span>
+          <span class="combo" id="combo">×1</span>
+          <i class="timebar"><i id="timebar"></i></i>
+        </div>
+        <nav class="tools glass" aria-label="Game options">
+          <button class="icon" id="btn-mute" aria-label="Mute sound" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" /><path class="wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /><path class="x" d="M16 9.5l5 5M21 9.5l-5 5" /></svg>
+          </button>
+          <button class="icon" id="btn-motion" aria-label="Reduce motion" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><path class="wave" d="M3 12c2.2-4 4.4-4 6.6 0s4.4 4 6.6 0 3.6-3 4.8-1.4" /><path class="flat" d="M3 12h18" /></svg>
+          </button>
+          <button class="icon" id="btn-home" aria-label="Back to the start screen">
+            <svg viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5" /><path d="M6.5 9.5V19h11V9.5" /></svg>
+          </button>
+        </nav>
+      </header>
+
+      <div class="bubble glass" id="bubble" aria-live="polite"></div>
+      <div id="popups" aria-hidden="true"></div>
+
+      <footer class="bottom">
+        <output class="gain" id="gain">+0</output>
+        <p class="status" id="status" aria-live="polite"></p>
+        <button class="hold" id="hold" aria-describedby="status">
+          <span class="hold-label">Hold</span>
+          <kbd>Space</kbd>
+        </button>
+      </footer>
+    </section>
+
+    <!-- ============ run over ============ -->
+    <div class="result" id="result" hidden>
+      <div class="card glass" role="dialog" aria-labelledby="result-title">
+        <h2 id="result-title"></h2>
+        <p class="big-score"><b id="result-score">0</b><span id="result-best"></span></p>
+        <p class="rank" id="result-rank" aria-live="polite"></p>
+        <form class="post" id="post-form">
+          <label class="name-field">
+            <span class="visually-hidden">Your name on the leaderboard</span>
+            <span class="flag" id="post-flag"></span>
+            <input id="post-name" maxlength="16" placeholder="Your name for the world board" autocomplete="nickname" />
+          </label>
+          <button class="primary" id="btn-post" type="submit">Post</button>
+        </form>
+        <div class="actions">
+          <button class="primary" id="btn-again">Again <kbd>Space</kbd></button>
+          <button class="ghost" id="btn-result-board">Leaderboard</button>
+          <button class="ghost" id="btn-result-home">Home</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ leaderboard ============ -->
+    <aside class="sheet glass" id="board" hidden aria-labelledby="board-title">
+      <div class="sheet-head">
+        <h2 id="board-title">World leaderboard</h2>
+        <button class="icon" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div class="board-tabs">
+        <div class="seg" role="tablist" id="board-mode">
+          <button role="tab" data-v="classic" aria-selected="true">Classic</button>
+          <button role="tab" data-v="blitz" aria-selected="false">ADHD mode</button>
+        </div>
+        <div class="seg small" role="tablist" id="board-period">
+          <button role="tab" data-v="today" aria-selected="true">Today</button>
+          <button role="tab" data-v="all" aria-selected="false">All time</button>
+        </div>
+      </div>
+      <ol class="rows" id="board-rows"></ol>
+      <p class="board-you" id="board-you"></p>
+    </aside>
+
+    <!-- ============ Mii maker ============ -->
+    <aside class="sheet glass maker" id="maker" hidden aria-labelledby="maker-title">
+      <div class="sheet-head">
+        <h2 id="maker-title">Make her yours</h2>
+        <button class="icon" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div class="maker-preview">
+        <canvas id="maker-canvas" width="360" height="300" aria-label="Preview of your egg"></canvas>
+      </div>
+      <nav class="maker-tabs" id="maker-tabs" role="tablist"></nav>
+      <div class="maker-body" id="maker-body"></div>
+      <div class="sheet-foot">
+        <button class="ghost" id="btn-random">
+          <svg viewBox="0 0 24 24"><path d="M4 7h3.5c4 0 5 10 9 10H20M17 14l3 3-3 3M4 17h3.5c1.4 0 2.4-1.2 3.3-2.8M13.2 9.8C14.1 8.2 15 7 16.5 7H20M17 4l3 3-3 3" /></svg>
+          Random
+        </button>
+        <button class="ghost" id="btn-reset">Reset to her</button>
+        <button class="primary" id="btn-done">Done</button>
+      </div>
+    </aside>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
