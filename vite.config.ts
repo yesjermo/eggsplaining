@@ -22,6 +22,15 @@ function devServer(): Plugin {
           res.end('saved');
           return;
         }
+        if (req.url === '/__save-shot' && req.method === 'POST') {
+          // dev only: save a render of the egg for marketing pages
+          const chunks: Buffer[] = [];
+          for await (const c of req) chunks.push(c as Buffer);
+          await mkdir('marketing', { recursive: true });
+          await writeFile('marketing/egg-render.png', Buffer.concat(chunks));
+          res.end('saved');
+          return;
+        }
         if (await api(req, res)) return;
         next();
       });
