@@ -16,13 +16,15 @@ import {
   TorusGeometry,
   Vector2,
   Vector3,
-  type BufferGeometry,
+  BufferGeometry,
+  Float32BufferAttribute,
   type Material,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Look } from '../shared/look.js';
 import type { FakeTellKind, Phase } from '../game/state';
-import { drawBangs, drawSkinDetails, shade } from '../face2d';
+import { drawBangs, shade } from '../face2d';
+import { drawMiiFace, REST, restMouth, type MiiPose } from '../miiface';
 
 // Matches tools/blender/build_head.py
 const H = 2.2;
@@ -31,6 +33,8 @@ const LEG = 0.22;
 const FACE_Y = H * 0.63;
 const HAIRLINE_Y = H * 0.8;
 const FACE_S = 0.66;
+/** decal half-size in face units */
+const DECAL_UNITS = 1.12;
 
 const TEX_W = 1024;
 const TEX_H = 512;
@@ -54,6 +58,10 @@ function sculpt(theta: number, h: number): number {
   off += 0.022 * g(theta, 0.75) * g(h - 0.92, 0.22);
   off += 0.008 * g(theta, 0.55) * g(h - 1.66, 0.07);
   return off;
+}
+
+function puff(theta: number, h: number): number {
+  return [-1, 1].reduce((a, s) => a + 0.05 * g(theta - s * 0.6, 0.32) * g(h - 1.1, 0.25), 0);
 }
 
 function onSurface(theta: number, y: number, off = 0, sculpted = true): Vector3 {
@@ -106,15 +114,6 @@ function clonePart(src: Object3D, mats: (name: string) => Material): Object3D {
   return c;
 }
 
-/** Set a named morph on every primitive of a part. */
-function setMorph(part: Object3D, name: string, value: number) {
-  part.traverse((o) => {
-    const m = o as Mesh;
-    const i = m.morphTargetDictionary?.[name];
-    if (i !== undefined && m.morphTargetInfluences) m.morphTargetInfluences[i] = value;
-  });
-}
-
 // ---------- animation frame input ----------
 
 export interface EggFrame {
@@ -133,23 +132,7 @@ export interface EggFrame {
 }
 
 /** Every animated face channel, eased toward a target each frame. */
-type Channel =
-  | 'close'
-  | 'sleepy'
-  | 'wide'
-  | 'worry'
-  | 'angry'
-  | 'raise'
-  | 'flat'
-  | 'frown'
-  | 'wavy'
-  | 'big'
-  | 'small'
-  | 'grin'
-  | 'o'
-  | 'puff'
-  | 'lookX'
-  | 'lookY';
+type Channel = keyof MiiPose | 'puff';
 
 export class Egg {
   readonly root = new Group();
@@ -175,20 +158,18 @@ export class Egg {
   private sweat: Mesh;
   private arms: Group[] = [];
   private legs: Group[] = [];
-  private eyes: { root: Group; sclera: Object3D; iris: Object3D; lid: Object3D }[] = [];
-  private brows: Object3D[] = [];
-  private mouthLine!: Object3D;
-  private mouthOpen!: Object3D;
   private nose!: Object3D;
+  private decal!: Mesh;
+  private faceCanvas = document.createElement('canvas');
+  private faceCtx!: CanvasRenderingContext2D;
+  private faceTex!: CanvasTexture;
+  private poseKey = '';
   private headTop = new Object3D();
-  private mouthBaseZ = 0;
   private noseBaseZ = 0;
   private look!: Look;
   private faceKey = '';
   private parts: Parts;
-  private ch: Record<Channel, number> = {
-    close: 0, sleepy: 0, wide: 0, worry: 0, angry: 0, raise: 0, flat: 0, frown: 0, wavy: 0, big: 0, small: 0, grin: 0, o: 0, puff: 0, lookX: 0, lookY: 0,
-  };
+  private ch: Record<Channel, number> = { ...REST, puff: 0 };
 
   private blinkT = 0;
   private nextBlink = 2;
@@ -273,59 +254,73 @@ export class Egg {
     }
   };
 
+  /**
+   * The Mii face lives on a thin decal that hugs her sculpted face (cheeks included) and is
+   * repainted from a 512px canvas whenever her expression moves.
+   */
   private buildFace() {
-    for (let i = 0; i < 2; i++) {
-      const root = new Group();
-      const sclera = clonePart(this.parts.Sclera, this.mat);
-      const iris = clonePart(this.parts.Iris, this.mat);
-      const lid = clonePart(this.parts.Lid, this.mat);
-      root.add(sclera, iris, lid);
-      this.face.add(root);
-      this.eyes.push({ root, sclera, iris, lid });
-      const brow = clonePart(this.parts.Brow, this.mat);
-      this.face.add(brow);
-      this.brows.push(brow);
+    this.faceCanvas.width = this.faceCanvas.height = 512;
+    this.faceCtx = this.faceCanvas.getContext('2d')!;
+    this.faceTex = new CanvasTexture(this.faceCanvas);
+    this.faceTex.colorSpace = SRGBColorSpace;
+    const W = DECAL_UNITS * FACE_S;
+    const N = 40;
+    const pos: number[] = [];
+    const puffed: number[] = [];
+    const uv: number[] = [];
+    const idx: number[] = [];
+    for (let j = 0; j <= N; j++) {
+      const y = FACE_Y - W + (2 * W * j) / N;
+      for (let i = 0; i <= N; i++) {
+        const x = -W + (2 * W * i) / N;
+        let th = 0;
+        for (let k = 0; k < 4; k++) th = Math.asin(MathUtils.clamp(x / (radiusAt(y) + sculpt(th, y)), -0.99, 0.99));
+        const p = onSurface(th, y, 0.007);
+        const q = onSurface(th, y, 0.007 + puff(th, y));
+        pos.push(p.x, p.y, p.z);
+        puffed.push(q.x, q.y, q.z);
+        uv.push(i / N, j / N);
+      }
     }
-    this.mouthLine = clonePart(this.parts.MouthLine, this.mat);
-    this.mouthOpen = clonePart(this.parts.MouthOpen, this.mat);
+    for (let j = 0; j < N; j++)
+      for (let i = 0; i < N; i++) {
+        const a = j * (N + 1) + i;
+        idx.push(a, a + 1, a + N + 2, a, a + N + 2, a + N + 1);
+      }
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    geo.morphAttributes.position = [new Float32BufferAttribute(puffed, 3)];
+    geo.computeVertexNormals();
+    this.decal = new Mesh(
+      geo,
+      new MeshLambertMaterial({ map: this.faceTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+    );
+    this.decal.morphTargetInfluences = [0];
+    this.decal.renderOrder = 1;
     this.nose = clonePart(this.parts.Nose, this.mat);
-    this.face.add(this.mouthLine, this.mouthOpen, this.nose);
+    this.face.add(this.decal, this.nose);
   }
 
-  /** Put the face parts on her sculpted surface for this look's eye spacing and size. */
+  private paintFace(pose: MiiPose) {
+    const key = Object.values(pose).map((v) => v.toFixed(2)).join('|');
+    if (key === this.poseKey) return;
+    this.poseKey = key;
+    const c = this.faceCtx;
+    c.clearRect(0, 0, 512, 512);
+    const px = 512 / (2 * DECAL_UNITS); // px per face unit
+    drawMiiFace(c, this.look, pose, 256, 256, px);
+    this.faceTex.needsUpdate = true;
+  }
+
+  /** The sculpted nose bump sits under the painted nose. */
   private layoutFace(look: Look) {
-    const ex = 0.4 * look.eyeGap * FACE_S;
-    const ey = FACE_Y + 0.05 * FACE_S;
-    this.eyes.forEach((e, i) => {
-      const s = i ? 1 : -1;
-      const th = Math.asin((s * ex) / (radiusAt(ey) + sculpt(0.3, ey)));
-      e.root.position.copy(onSurface(th, ey, -0.01));
-      e.root.rotation.set(0, th, 0);
-      e.root.scale.setScalar(look.eyeSize);
-      const dot = look.eyes === 'dot';
-      e.sclera.visible = !dot;
-      e.lid.visible = !dot;
-      e.iris.scale.setScalar(dot ? 0.62 : 1);
-    });
-    const by = FACE_Y + 0.36 * FACE_S;
-    this.brows.forEach((b, i) => {
-      const s = i ? 1 : -1;
-      const th = Math.asin((s * (ex + 0.02)) / radiusAt(by));
-      b.position.copy(onSurface(th, by, 0.006));
-      b.rotation.set(0, th, 0);
-      const thick = look.brows === 'thick' ? 1.8 : look.brows === 'thin' ? 0.6 : 1;
-      b.scale.set(s, thick, 1); // mirror the left brow
-    });
     const ny = FACE_Y - 0.24 * FACE_S;
     this.nose.position.copy(onSurface(0, ny, 0));
-    this.nose.visible = look.nose === 'button' || look.nose === 'round';
-    this.nose.scale.setScalar(look.nose === 'round' ? 1.45 : 1);
-    const my = FACE_Y - 0.52 * FACE_S;
-    this.mouthLine.position.copy(onSurface(0, my, 0.006));
-    this.mouthOpen.position.copy(onSurface(0, my, 0.003));
-    this.mouthBaseZ = this.mouthLine.position.z;
     this.noseBaseZ = this.nose.position.z;
-    this.lipMat.color.set(shade(look.lip, -0.15));
+    this.nose.visible = look.nose === 'button' || look.nose === 'round';
+    this.nose.scale.setScalar(look.nose === 'round' ? 1.4 : 0.85);
   }
 
   applyLook(look: Look): void {
@@ -342,6 +337,7 @@ export class Egg {
     this.setHair(look);
     this.setGlasses(look);
     this.faceKey = '';
+    this.poseKey = '';
   }
 
   // ---------- skin texture: colour, blush, mole, outfit, painted bangs, cracks ----------
@@ -386,7 +382,6 @@ export class Egg {
     c.save();
     c.translate(cx, toY(FACE_Y));
     c.scale(1, PX_Y / PX_X);
-    drawSkinDetails(c, look, flush, 0, 0, FACE_S * PX_X);
     if (!(look.bangs === 'wispy' && look.hair !== 'buzz')) drawBangs(c, look, FACE_S * PX_X * 1.05, 0, (FACE_Y - HAIRLINE_Y) * PX_X - 6);
     c.restore();
     if (sooty) {
@@ -601,56 +596,31 @@ export class Egg {
       this.blinking = 0.13;
     }
 
-    // ---- expression targets
-    const base = { sleepy: look.eyes === 'sleepy' ? 1 : look.eyes === 'almond' ? 0.55 : 0.2, wide: look.eyes === 'round' || look.eyes === 'lashes' ? 0.25 : 0 };
-    const T: Record<Channel, number> = {
-      close: 0, sleepy: base.sleepy, wide: base.wide, worry: 0, angry: 0, raise: 0, flat: 0, frown: 0, wavy: 0, big: 0, small: 0, grin: 0, o: 0, puff: 0, lookX: 0, lookY: 0,
-    };
-    if (look.brows === 'straight') T.flat = 0;
-    if (look.mouth === 'small') T.small = 1;
-    if (look.mouth === 'pout') T.small = 1;
-    if (look.mouth === 'grin') T.big = 0.6;
-    if (look.mouth === 'cat') T.wavy = 0.35;
+    // ---- expression targets, as a continuous Mii pose
+    const rest = restMouth(look);
+    const T: Record<Channel, number> = { ...REST, ...rest, puff: 0 };
     let shake = 0;
     if (popped) {
-      T.sleepy = 1;
-      T.close = 0.3;
-      T.flat = 1;
-      T.small = 0;
-      T.angry = 0.4;
+      Object.assign(T, { deadpan: 1, smile: -0.1, mouthOpen: 0, worry: -0.5 });
     } else if (f.fakeTell === 'serene') {
-      T.close = 0.95;
-      T.grin = 1;
-      T.raise = 0.6;
+      Object.assign(T, { happy: 1, smile: 1, mouthOpen: 0.7 });
       shake = Math.max(0, tens - 0.6) * 0.35;
     } else if (f.fakeTell === 'panic') {
-      T.wide = 1;
-      T.sleepy = 0;
-      T.o = 1;
-      T.worry = 1;
+      Object.assign(T, { wide: 1, worry: 1, mouthOpen: 0.8, round: 1, smile: 0 });
       shake = 0.6;
     } else {
-      if (tens > 0.72) {
-        T.wavy = 1;
-        T.small = 0;
-      } else if (tens > 0.45) T.flat = 1;
+      if (tens > 0.72) Object.assign(T, { smile: -0.1, mouthOpen: 0, wavy: 1 });
+      else if (tens > 0.45) Object.assign(T, { smile: 0.05, mouthOpen: 0 });
       if (f.holding) {
         T.worry = Math.min(1, tens * 1.15);
         T.puff = MathUtils.smoothstep(tens, 0.3, 0.9) * 0.9;
-        if (tens > 0.6) {
-          T.wide = 0.8;
-          T.sleepy = base.sleepy * 0.3;
-        }
+        if (tens > 0.6) T.wide = MathUtils.smoothstep(tens, 0.6, 0.9);
       }
       shake = Math.max(0, tens - 0.55) / 0.45;
-      if (f.bankAge >= 0 && f.bankAge < 0.7) {
-        T.grin = 1;
-        T.close = 0.85;
-        T.raise = 0.7;
-        T.flat = T.wavy = 0;
-      }
+      if (f.bankAge >= 0 && f.bankAge < 0.7) Object.assign(T, { happy: 1, smile: 1, mouthOpen: 0.75, wavy: 0, worry: -0.1 });
     }
-    if (this.blinking > 0) T.close = 1;
+    if (this.blinking > 0) T.open = 0;
+    T.flush = popped ? 0.6 : Math.pow(tens, 1.5);
 
     // look around: glance at the gauge on long holds, little idle darts otherwise
     this.glanceTimer -= f.dt;
@@ -660,56 +630,32 @@ export class Egg {
     }
     if (!f.holding || popped) this.glance = 0;
     this.dart.t -= f.dt;
-    if (this.dart.t <= 0) {
-      this.dart = { x: (Math.random() - 0.5) * 0.6, y: (Math.random() - 0.5) * 0.3, t: 1.2 + Math.random() * 2.2 };
-    }
+    if (this.dart.t <= 0) this.dart = { x: (Math.random() - 0.5) * 0.7, y: (Math.random() - 0.5) * 0.4, t: 1.2 + Math.random() * 2.2 };
     T.lookX = this.glance ? -1 : popped ? 0 : this.dart.x * k;
-    T.lookY = this.glance ? 0.6 : popped ? 0 : this.dart.y * k;
+    T.lookY = this.glance ? -0.6 : popped ? 0 : this.dart.y * k;
 
-    // ---- ease every channel (this is the "animated" part: no snapping between faces)
+    // ---- ease every channel: no snapping between faces
     const dt = f.dt;
-    this.ease('close', T.close, T.close > this.ch.close ? 40 : 18, dt);
-    for (const c of ['sleepy', 'wide', 'worry', 'angry', 'raise', 'flat', 'frown', 'wavy', 'big', 'small', 'grin', 'o'] as Channel[]) this.ease(c, T[c], 12, dt);
+    this.ease('open', T.open, T.open < this.ch.open ? 45 : 16, dt);
+    for (const c of ['happy', 'wide', 'worry', 'smile', 'mouthOpen', 'round', 'wavy', 'deadpan'] as Channel[]) this.ease(c, T[c], 11, dt);
+    this.ease('flush', T.flush, 4, dt);
     this.ease('puff', T.puff, 6, dt);
     this.ease('lookX', T.lookX, 14, dt);
     this.ease('lookY', T.lookY, 14, dt);
-
-    // ---- apply to the meshes
     const ch = this.ch;
-    for (const e of this.eyes) {
-      setMorph(e.lid, 'Close', ch.close);
-      setMorph(e.lid, 'Sleepy', Math.max(0, ch.sleepy * (1 - ch.close)));
-      setMorph(e.lid, 'Wide', ch.wide * (1 - ch.close));
-      e.iris.position.set(ch.lookX * 0.03, ch.lookY * 0.02, 0);
-      if (look.eyes === 'dot') e.iris.scale.set(0.62, 0.62 * (1 - ch.close * 0.9), 0.62);
-    }
-    for (const b of this.brows) {
-      setMorph(b, 'Worry', ch.worry);
-      setMorph(b, 'Angry', ch.angry);
-      setMorph(b, 'Raise', ch.raise);
-      setMorph(b, 'Flat', look.brows === 'straight' ? 1 : 0);
-      setMorph(b, 'Arch', look.brows === 'arched' ? 1 : 0);
-    }
-    const open = Math.max(ch.grin, ch.o);
-    setMorph(this.mouthOpen, 'Grin', ch.grin);
-    setMorph(this.mouthOpen, 'O', ch.o);
-    this.mouthOpen.visible = open > 0.04;
-    this.mouthLine.visible = open < 0.55;
-    setMorph(this.mouthLine, 'Flat', ch.flat);
-    setMorph(this.mouthLine, 'Wavy', ch.wavy);
-    setMorph(this.mouthLine, 'Big', ch.big);
-    setMorph(this.mouthLine, 'Small', ch.small);
-    setMorph(this.mouthLine, 'Frown', ch.frown);
-    // the cheek puff pushes the lower face forward; keep the mouth and nose riding on top
+    this.paintFace({
+      open: ch.open, happy: ch.happy, wide: ch.wide, worry: ch.worry, smile: ch.smile, mouthOpen: ch.mouthOpen,
+      round: ch.round, wavy: ch.wavy, lookX: ch.lookX, lookY: ch.lookY, flush: ch.flush, deadpan: ch.deadpan,
+    });
+
     const puffNow = ch.puff + (popped ? 0.3 : 0);
-    this.mouthLine.position.z = this.mouthBaseZ + puffNow * 0.028;
-    this.mouthOpen.position.z = this.mouthBaseZ - 0.003 + puffNow * 0.028;
     this.nose.position.z = this.noseBaseZ + puffNow * 0.012;
+    if (this.decal.morphTargetInfluences) this.decal.morphTargetInfluences[0] = puffNow;
     const i = this.shell.morphTargetDictionary?.Puff;
-    if (i !== undefined && this.shell.morphTargetInfluences) this.shell.morphTargetInfluences[i] = ch.puff + (popped ? 0.3 : 0);
+    if (i !== undefined && this.shell.morphTargetInfluences) this.shell.morphTargetInfluences[i] = puffNow;
 
     // skin: flush, cracks (never faked), soot after the pop
-    const flush = popped ? 0.6 : Math.round(Math.pow(tens, 1.5) * 10) / 10;
+    const flush = 0;
     const cracks = popped ? 5 : tens > 0.72 ? Math.min(5, 1 + Math.floor((tens - 0.72) / 0.05)) : 0;
     this.paint(flush, cracks, popped);
 

@@ -10,12 +10,7 @@ Units match src/render/egg.ts: egg height H = 2.2, base radius R = 0.82, bottom 
 Exported objects
   Body        sculpted egg (round cheeks, soft jaw), cylindrical UVs (u = 0.5 at the front,
               v = height / H) so the game's painted texture lines up. Shape key: Puff.
-  Sclera      eye white, local, centred at the eye, facing -Y.
-  Iris        iris + pupil + glint, local (the game slides it to look around).
-  Lid         upper lid with lash line. Shape keys: Close, Sleepy, Wide.
-  Brow        right brow (game mirrors it). Shape keys: Worry, Angry, Raise, Flat, Arch.
-  MouthLine   closed lips line. Shape keys: Flat, Frown, Wavy, Big, Small.
-  MouthOpen   open mouth with teeth, collapsed at rest. Shape keys: Grin, O.
+  (eyes, brows and mouth are painted Mii-style by the game on a decal over this head)
   Nose        soft button nose, local.
   HairLowbun  hair cap, low bun with tie, face-framing strands (body space).
   BangsWispy  wispy curtain bangs (body space).
@@ -456,14 +451,10 @@ def build_bangs():
 
 # ---------------------------------------------------------------- build + preview + export
 
+# The game paints her face Mii-style on top of this head, so only the sculpted shapes ship.
+# The eye/brow/mouth builders above are kept for experiments; add them here to export them.
 parts = [
     build_body(),
-    build_sclera(),
-    build_iris(),
-    build_lid(),
-    build_brow(),
-    build_mouth_line(),
-    build_mouth_open(),
     build_nose(),
     build_hair(),
     build_bangs(),
@@ -492,20 +483,8 @@ def place_preview():
     copy("Body", (0, 0, 0))
     copy("HairLowbun", (0, 0, 0))
     copy("BangsWispy", (0, 0, 0))
-    ex = 0.4 * 1.05 * FACE_S
-    ey = FACE_Y + 0.05 * FACE_S
-    for s in (-1, 1):
-        th = math.asin(s * ex / radius_at(ey))
-        p = surf(th, ey, sculpt(th, ey) - 0.01)
-        for n, keys in (("Sclera", None), ("Iris", None), ("Lid", {"Sleepy": 1.0})):
-            copy(n, p, th, keys=keys)
-        by = FACE_Y + 0.36 * FACE_S
-        bth = math.asin(s * (ex + 0.02) / radius_at(by))
-        copy("Brow", surf(bth, by, sculpt(bth, by) + 0.006), bth, mirror=(s < 0))
     ny = FACE_Y - 0.24 * FACE_S
     copy("Nose", surf(0, ny, sculpt(0, ny)))
-    my = FACE_Y - 0.52 * FACE_S
-    copy("MouthLine", surf(0, my, sculpt(0, my) + 0.004))
     return col
 
 

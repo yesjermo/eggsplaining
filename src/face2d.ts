@@ -2,6 +2,7 @@
 // option previews, leaderboard avatars and the hand-drawn splash ghost.
 
 import type { Look } from './shared/look.js';
+import { drawMiiFace, REST, restMouth, type MiiPose } from './miiface';
 
 export interface FaceExpr {
   eyes: 'open' | 'closed' | 'happy' | 'wide' | 'deadpan' | 'blink';
@@ -29,7 +30,6 @@ export interface DrawOpts {
   back?: boolean;
 }
 
-const INK = '#2b2232';
 
 function hash(n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -107,210 +107,21 @@ export function drawSkinDetails(ctx: CanvasRenderingContext2D, look: Look, flush
 }
 
 export function drawFace(ctx: CanvasRenderingContext2D, look: Look, ex: FaceExpr, cx: number, cy: number, s: number, o: DrawOpts = {}): void {
-  const ink = o.ink ?? (o.ghost ? 'rgba(90,86,100,0.75)' : INK);
-  const W = o.wobble;
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(s, s);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  const lw = 0.065;
-
-  if (!o.ghost && (look.blush || ex.flush > 0)) {
-    const a = (look.blush ? 0.22 : 0) + ex.flush * 0.55;
-    ctx.fillStyle = `rgba(255,105,140,${Math.min(0.8, a)})`;
-    for (const sx of [-1, 1]) {
-      ctx.beginPath();
-      ctx.ellipse(sx * 0.62, 0.3, 0.2, 0.11, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  if (!o.ghost && look.freckles) {
-    ctx.fillStyle = 'rgba(150,90,60,0.55)';
-    for (const sx of [-1, 1])
-      for (const [x, y] of [
-        [0.38, 0.16],
-        [0.48, 0.22],
-        [0.42, 0.3],
-        [0.55, 0.14],
-      ]) {
-        ctx.beginPath();
-        ctx.arc(sx * x, y, 0.025, 0, Math.PI * 2);
-        ctx.fill();
-      }
-  }
-
-  const gap = 0.4 * look.eyeGap;
-  const er = 0.16 * look.eyeSize;
-  const ey = -0.05;
-  for (const sx of [-1, 1]) {
-    ctx.save();
-    ctx.translate(sx * gap + jit(W, sx, 0.012), ey + jit(W, sx + 5, 0.012));
-    drawEye(ctx, look.eyes, ex, er, sx, ink, lw, o.ghost === true);
-    ctx.restore();
-  }
-
-  const by = -0.42 - ex.worry * 0.05;
-  ctx.strokeStyle = o.ghost ? ink : look.hairColor === '#e9e3d9' ? '#8a7f70' : look.hairColor;
-  for (const sx of [-1, 1]) {
-    ctx.save();
-    ctx.translate(sx * (gap + 0.02), by);
-    ctx.scale(sx, 1);
-    ctx.rotate(ex.worry * 0.45);
-    drawBrow(ctx, look.brows, lw);
-    ctx.restore();
-  }
-
-  ctx.strokeStyle = o.ghost ? ink : shade(look.skin, -0.32);
-  ctx.fillStyle = ctx.strokeStyle;
-  ctx.lineWidth = lw * 0.85;
-  drawNose(ctx, look.nose);
-
-  drawMouth(ctx, look, ex, ink, lw, o.ghost === true);
-
-  const mp: Record<string, [number, number]> = {
-    chinL: [-0.2, 0.8],
-    chinR: [0.2, 0.8],
-    cheekL: [-0.55, 0.42],
-    cheekR: [0.55, 0.42],
-    lipL: [-0.34, 0.6],
-  };
-  if (!o.ghost && mp[look.mole]) {
-    const [x, y] = mp[look.mole];
-    ctx.fillStyle = '#3a2a2a';
-    ctx.beginPath();
-    ctx.arc(x, y, 0.032, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
+  drawMiiFace(ctx, look, poseFromExpr(look, ex), cx, cy, s, { ghost: o.ghost, wobble: o.wobble });
 }
 
-function drawEye(ctx: CanvasRenderingContext2D, style: string, ex: FaceExpr, r: number, sx: number, ink: string, lw: number, ghost: boolean) {
-  ctx.strokeStyle = ink;
-  ctx.fillStyle = ink;
-  ctx.lineWidth = lw;
-  const mode = ex.eyes;
-  if (mode === 'blink' || mode === 'closed') {
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.35, r * 0.95, Math.PI * 0.18, Math.PI * 0.82);
-    ctx.stroke();
-    return;
-  }
-  if (mode === 'happy') {
-    ctx.beginPath();
-    ctx.arc(0, r * 0.55, r, Math.PI * 1.18, Math.PI * 1.82);
-    ctx.stroke();
-    return;
-  }
-  const wide = mode === 'wide' ? 1.3 : 1;
-  const px = ex.lookX * r * 0.35;
-  const py = ex.lookY * r * 0.3;
-  const whites = ghost ? 'rgba(255,255,255,0.6)' : '#ffffff';
-
-  switch (style) {
-    case 'sleepy': {
-      const h = r * 0.48 * wide;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, r * 1.05, h, 0, 0, Math.PI * 2);
-      ctx.fillStyle = whites;
-      ctx.fill();
-      ctx.save();
-      ctx.clip();
-      ctx.fillStyle = ink;
-      ctx.beginPath();
-      ctx.arc(px, py + h * 0.2, r * 0.62, 0, Math.PI * 2);
-      ctx.fill();
-      if (!ghost) {
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(px + r * 0.22, py - h * 0.15, r * 0.14, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-      ctx.lineWidth = lw * 1.2;
-      ctx.beginPath();
-      ctx.ellipse(0, h * 0.15, r * 1.08, h * 1.05, 0, Math.PI * 1.05, Math.PI * 1.95);
-      ctx.stroke();
-      break;
-    }
-    case 'dot':
-      ctx.beginPath();
-      ctx.ellipse(px * 0.5, py * 0.5, r * 0.42 * wide, r * 0.55 * wide, 0, 0, Math.PI * 2);
-      ctx.fill();
-      break;
-    default: {
-      const ry = (style === 'almond' ? r * 0.72 : r * 1.12) * wide;
-      const rx = (style === 'almond' ? r * 1.1 : r * 0.92) * wide;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-      ctx.fillStyle = whites;
-      ctx.fill();
-      ctx.lineWidth = lw * 0.8;
-      ctx.stroke();
-      ctx.save();
-      ctx.clip();
-      ctx.fillStyle = ink;
-      ctx.beginPath();
-      ctx.arc(px, py + ry * 0.12, r * 0.6, 0, Math.PI * 2);
-      ctx.fill();
-      if (!ghost) {
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(px + r * 0.2, py - ry * 0.12, r * 0.16, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-      if (style === 'lashes') {
-        ctx.lineWidth = lw * 0.8;
-        for (const a of [-0.55, -0.15, 0.25]) {
-          const ang = -Math.PI / 2 + a * sx;
-          ctx.beginPath();
-          ctx.moveTo(Math.cos(ang) * rx * 0.95, Math.sin(ang) * ry * 0.95);
-          ctx.lineTo(Math.cos(ang) * rx * 1.35, Math.sin(ang) * ry * 1.35);
-          ctx.stroke();
-        }
-      }
-    }
-  }
-  if (mode === 'deadpan') {
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = lw * 1.3;
-    ctx.beginPath();
-    ctx.moveTo(-r * 1.15, -r * 0.05);
-    ctx.lineTo(r * 1.15, -r * 0.05);
-    ctx.stroke();
-  }
-}
-
-function drawBrow(ctx: CanvasRenderingContext2D, style: string, lw: number) {
-  ctx.beginPath();
-  switch (style) {
-    case 'straight':
-      ctx.lineWidth = lw * 1.3;
-      ctx.moveTo(-0.15, 0);
-      ctx.lineTo(0.15, 0);
-      break;
-    case 'arched':
-      ctx.lineWidth = lw * 1.2;
-      ctx.moveTo(-0.17, 0.04);
-      ctx.quadraticCurveTo(0.02, -0.1, 0.17, 0.02);
-      break;
-    case 'thick':
-      ctx.lineWidth = lw * 2.4;
-      ctx.moveTo(-0.15, 0.01);
-      ctx.quadraticCurveTo(0, -0.04, 0.15, 0.01);
-      break;
-    case 'thin':
-      ctx.lineWidth = lw * 0.7;
-      ctx.moveTo(-0.16, 0.02);
-      ctx.quadraticCurveTo(0, -0.05, 0.16, 0.02);
-      break;
-    default:
-      ctx.lineWidth = lw * 1.05;
-      ctx.moveTo(-0.17, 0.02);
-      ctx.quadraticCurveTo(0, -0.05, 0.16, 0.0);
-  }
-  ctx.stroke();
+/** Map the simple expression names used by 2D callers onto a continuous Mii pose. */
+export function poseFromExpr(look: Look, ex: FaceExpr): MiiPose {
+  const p: MiiPose = { ...REST, ...restMouth(look), worry: ex.worry, lookX: ex.lookX, lookY: ex.lookY, flush: ex.flush };
+  if (ex.eyes === 'closed' || ex.eyes === 'blink') p.open = 0;
+  if (ex.eyes === 'happy') p.happy = 1;
+  if (ex.eyes === 'wide') p.wide = 1;
+  if (ex.eyes === 'deadpan') p.deadpan = 1;
+  if (ex.mouth === 'flat') Object.assign(p, { smile: 0, mouthOpen: 0 });
+  if (ex.mouth === 'wavy') Object.assign(p, { smile: 0, mouthOpen: 0, wavy: 1 });
+  if (ex.mouth === 'o') Object.assign(p, { mouthOpen: 0.8, round: 1 });
+  if (ex.mouth === 'grin') Object.assign(p, { smile: 0.9, mouthOpen: 0.75 });
+  return p;
 }
 
 function drawNose(ctx: CanvasRenderingContext2D, style: string) {
@@ -336,78 +147,6 @@ function drawNose(ctx: CanvasRenderingContext2D, style: string) {
     default:
       ctx.moveTo(-0.07, y + 0.01);
       ctx.quadraticCurveTo(0, y + 0.08, 0.07, y + 0.01);
-      ctx.stroke();
-  }
-}
-
-function drawMouth(ctx: CanvasRenderingContext2D, look: Look, ex: FaceExpr, ink: string, lw: number, ghost: boolean) {
-  const y = 0.52;
-  ctx.strokeStyle = ghost ? ink : shade(look.lip, -0.25);
-  ctx.lineWidth = lw;
-  const kind = ex.mouth === 'default' ? look.mouth : ex.mouth;
-  ctx.beginPath();
-  switch (kind) {
-    case 'flat':
-      ctx.moveTo(-0.16, y);
-      ctx.lineTo(0.16, y);
-      ctx.stroke();
-      break;
-    case 'wavy':
-      ctx.moveTo(-0.22, y);
-      for (let i = 1; i <= 8; i++) ctx.lineTo(-0.22 + i * 0.055, y + (i % 2 ? -0.035 : 0.035));
-      ctx.stroke();
-      break;
-    case 'o':
-      ctx.ellipse(0, y + 0.02, 0.08, 0.1, 0, 0, Math.PI * 2);
-      ctx.fillStyle = ghost ? 'rgba(90,86,100,0.35)' : '#5a2236';
-      ctx.fill();
-      ctx.stroke();
-      break;
-    case 'grin':
-      ctx.moveTo(-0.26, y - 0.04);
-      ctx.quadraticCurveTo(0, y + 0.34, 0.26, y - 0.04);
-      ctx.quadraticCurveTo(0, y + 0.02, -0.26, y - 0.04);
-      ctx.fillStyle = ghost ? 'rgba(255,255,255,0.5)' : '#6b2438';
-      ctx.fill();
-      if (!ghost) {
-        ctx.save();
-        ctx.clip();
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(-0.3, y - 0.06, 0.6, 0.1);
-        ctx.restore();
-      }
-      ctx.stroke();
-      break;
-    case 'small':
-      ctx.moveTo(-0.08, y);
-      ctx.quadraticCurveTo(0, y + 0.06, 0.08, y);
-      ctx.stroke();
-      break;
-    case 'pout':
-      ctx.ellipse(0, y + 0.01, 0.09, 0.055, 0, 0, Math.PI * 2);
-      ctx.fillStyle = ghost ? 'rgba(255,255,255,0.4)' : look.lip;
-      ctx.fill();
-      ctx.lineWidth = lw * 0.7;
-      ctx.stroke();
-      break;
-    case 'cat':
-      ctx.moveTo(-0.18, y - 0.02);
-      ctx.quadraticCurveTo(-0.09, y + 0.09, 0, y);
-      ctx.quadraticCurveTo(0.09, y + 0.09, 0.18, y - 0.02);
-      ctx.stroke();
-      break;
-    default:
-      if (!ghost) {
-        ctx.fillStyle = look.lip;
-        ctx.globalAlpha = 0.55;
-        ctx.beginPath();
-        ctx.ellipse(0, y + 0.03, 0.17, 0.05, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-      ctx.beginPath();
-      ctx.moveTo(-0.2, y - 0.01);
-      ctx.quadraticCurveTo(0, y + 0.09, 0.2, y - 0.01);
       ctx.stroke();
   }
 }

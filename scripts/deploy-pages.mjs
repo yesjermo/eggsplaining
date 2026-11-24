@@ -7,7 +7,7 @@
 // from .env.production if present: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY.
 
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -17,6 +17,17 @@ const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: 'inherit'
 const out = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
 if (!existsSync('.env.production')) console.log('note: no .env.production, so this build ships without the world board');
+else {
+  const env = readFileSync('.env.production', 'utf8');
+  if (/YOUR-|xxxx|abcd1234|your-key|\.\.\./i.test(env) || !/VITE_SUPABASE_URL=https:\/\/[a-z0-9]{10,}\.supabase\.co/.test(env)) {
+    console.error('.env.production still has placeholder values. Put in your real Supabase Project URL and anon key first.');
+    process.exit(1);
+  }
+  if (/service_role/i.test(env)) {
+    console.error('.env.production looks like it has the service_role key. Use the anon public key instead.');
+    process.exit(1);
+  }
+}
 
 run('npm', ['run', 'build'], { env: { ...process.env, BASE_PATH: `/${SITE}/` } });
 
