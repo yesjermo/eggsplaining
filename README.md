@@ -14,7 +14,8 @@
 ![Hold time](https://img.shields.io/badge/hold%20time-too%20long-ffb347)
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![Canvas 2D](https://img.shields.io/badge/Canvas%202D-no%20WebGL-b9a4ff)
+![Canvas 2D](https://img.shields.io/badge/Canvas%202D-cartoon-b9a4ff)
+![Three.js](https://img.shields.io/badge/Three.js-3D%20styles-000000?logo=threedotjs&logoColor=white)
 ![Size](https://img.shields.io/badge/whole%20game-~22%20KB%20gzipped-7fd6c2)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
@@ -74,6 +75,16 @@ Hit **Make her yours** for a Mii Maker:
 | Extras | mole, blush, freckles, glasses and frame colour, favourite colour |
 | Name | her nickname, her after-pop line, your leaderboard name, your country |
 
+**Three styles** (pick one at the top of the Mii Maker):
+
+| Style | What it is |
+| --- | --- |
+| **Cartoon** | The default: a flat, outlined 2D cut-out that moves like jelly. No 3D library, so the game is about 22 KB gzipped. |
+| **3D** | The very first design brought back: a smooth 3D egg in a glossy pastel chamber, with the original Mii face (`src/render3d/`). |
+| **3D Mii** | Mii proportions: a big round head on a small body with stubby arms, matte shading and her cute flat Mii face. |
+
+Three.js only downloads (about 134 KB gzipped) when someone picks a 3D style.
+
 The default is a real friend, lovingly egg-ified (`src/shared/look.js`): a low bun with wispy curtain bangs, sleepy monolid eyes, round cheeks, a chin mole and a purple top. Say hi to Peggy.
 
 ## How she's made
@@ -131,6 +142,7 @@ delete from scores where name = 'Setup test';
 | `src/face2d.ts` | Her Mii face, hair and outlined cartoon cels, plus the sketchy ghost for the splash |
 | `src/render/egg.ts` | The cartoon cut-out in the chamber: expressions, limbs, squash, wobble, sweat, the fall |
 | `src/render/scene.ts` | The chamber, confetti, shell shards, the soul, the camera |
+| `src/render3d/` | The 3D styles: the first design's egg and the 3D Mii, in Three.js |
 | `src/splash.ts` | Soul-leaving-body splash and GIF export |
 | `src/ui/miimaker.ts` | The Mii Maker |
 | `src/leaderboard.ts` | Leaderboard client: Supabase when live, local API in dev |

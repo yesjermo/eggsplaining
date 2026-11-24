@@ -5,8 +5,13 @@ import type { Mode } from './game/state';
 
 export type { Look };
 
+/** how she's drawn: the flat 2D cartoon, the first design's 3D egg, or the 3D Mii */
+export type Style = 'cartoon' | '3d' | '3d-mii';
+export const STYLES: readonly Style[] = ['cartoon', '3d', '3d-mii'];
+
 export interface Settings {
   look: Look;
+  style: Style;
   /** name shown on the world leaderboard */
   playerName: string;
   /** random id so the board keeps one best score per player */
@@ -50,6 +55,7 @@ export function guessCountry(): string {
 export function defaultSettings(): Settings {
   return {
     look: { ...PRESET },
+    style: 'cartoon',
     playerName: '',
     playerId: newId(),
     country: guessCountry(),
@@ -67,6 +73,7 @@ export function loadSettings(): Settings {
     const p = JSON.parse(raw) as Partial<Settings>;
     return {
       look: sanitizeLook(p.look),
+      style: STYLES.includes(p.style as Style) ? (p.style as Style) : 'cartoon',
       playerName: cleanText(p.playerName, '', 16),
       playerId: typeof p.playerId === 'string' && /^[a-z0-9]{12,40}$/.test(p.playerId) ? p.playerId : base.playerId,
       country: cleanCountry(p.country) || base.country,

@@ -7,8 +7,19 @@ import { Splash, splashGif } from './splash';
 import { createMaker } from './ui/miimaker';
 import { avatarDataUrl } from './face2d';
 import { PRESET, randomLook, sanitizeLook, type Look } from './shared/look.js';
-import { flag, loadSettings, saveSettings, type Settings } from './settings';
-import type { Stage } from './render/scene';
+import { flag, loadSettings, saveSettings, type Settings, type Style } from './settings';
+import type { EggFrame } from './render/egg';
+
+/** What both renderers offer: the flat 2D cartoon stage and the 3D (first design / Mii) stage. */
+interface Stage {
+  reset(): void;
+  resize(): void;
+  setLook(look: Look): void;
+  pop(reduced: boolean, big?: boolean): void;
+  headScreen(): { x: number; y: number };
+  frame(f: EggFrame): void;
+  dispose?(): void;
+}
 import { backend } from './leaderboard';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -87,12 +98,45 @@ showBests();
 
 function loadStage(): Promise<Stage> {
   if (stage) return Promise.resolve(stage);
-  stageLoading ??= import('./render/scene').then(async ({ Stage }) => {
-    stage = await Stage.create($<HTMLCanvasElement>('#stage'), settings.look);
-    return stage;
+  // the 3D renderer (and Three.js) only downloads when someone picks a 3D style
+  const style = settings.style;
+  const canvas = $<HTMLCanvasElement>('#stage');
+  stageLoading ??= (
+    style === 'cartoon'
+      ? import('./render/scene').then(({ Stage }) => Stage.create(canvas, settings.look))
+      : import('./render3d/scene').then(({ Stage }) => Stage.create(canvas, settings.look, style === '3d-mii' ? 'mii' : 'classic'))
+  ).then((s) => {
+    stage = s;
+    return s;
   });
   return stageLoading;
 }
+
+/** Swap renderers. A canvas can't go from 2D to WebGL, so she gets a fresh one. */
+async function setStyle(style: Style) {
+  if (style === settings.style) return;
+  settings.style = style;
+  saveSettings(settings);
+  syncStyleSeg();
+  const old = stage ?? (stageLoading ? await stageLoading : null);
+  old?.dispose?.();
+  stage = null;
+  stageLoading = null;
+  const prev = $<HTMLCanvasElement>('#stage');
+  prev.replaceWith(prev.cloneNode(false));
+  const s = await loadStage();
+  s.resize();
+}
+
+function syncStyleSeg() {
+  document.querySelectorAll<HTMLButtonElement>('#style-seg button').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.style === settings.style));
+  });
+}
+document.querySelectorAll<HTMLButtonElement>('#style-seg button').forEach((b) =>
+  b.addEventListener('click', () => void setStyle(b.dataset.style as Style)),
+);
+syncStyleSeg();
 // warm up Three.js once the splash is on screen
 (window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 600)))(() => void loadStage());
 
