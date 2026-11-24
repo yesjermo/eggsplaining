@@ -14,7 +14,8 @@
 ![Hold time](https://img.shields.io/badge/hold%20time-too%20long-ffb347)
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![Three.js](https://img.shields.io/badge/Three.js-000000?logo=threedotjs&logoColor=white)
+![Canvas 2D](https://img.shields.io/badge/Canvas%202D-no%20WebGL-b9a4ff)
+![Size](https://img.shields.io/badge/whole%20game-~22%20KB%20gzipped-7fd6c2)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
 ![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-222222?logo=githubpages&logoColor=white)
@@ -77,9 +78,10 @@ The default is a real friend, lovingly egg-ified (`src/shared/look.js`): a low b
 
 ## How she's made
 
-- **Her:** a flat **cartoon cut-out** with the original Mii face (`src/face2d.ts`). Every part is a flat colour cel with a bold ink outline: back hair, the egg with its outfit band, one shine and one shadow crescent, then her front hair and a centre-parted fringe. Arms, legs and sneakers are drawn on the same canvas (`src/render/egg.ts`), which stands upright in the 3D chamber and squashes, wobbles, jitters and finally keels over. Cheeks puff, cracks spread and her hair stands on end after a pop.
+- **Her:** a flat **cartoon cut-out** with the original Mii face, made cuter (`src/face2d.ts`): bigger eyes with two sparkles, round blush, and curtain bangs parted in the middle. Every part is a flat colour cel with a bold ink outline. Stubby arms, little legs and round sneakers are drawn on the same canvas (`src/render/egg.ts`), which is only repainted when her pose changes.
+- **How she moves:** like jelly. A springy squash-and-stretch wobbles her whenever anything changes, she does little idle hops while she waits, a happy hop and wave on every bank, and squishes down as you hold. Her cheeks puff, cracks spread and, after a pop, her hair stands on end and she keels over with a bounce.
 - **Everywhere else:** the same drawing makes the Mii Maker previews and the leaderboard avatars, so she looks the same on every screen.
-- **Stage:** lightweight **Three.js** with no shadow maps and no model files, loaded behind the 2D splash so the first screen is about 17 KB gzipped.
+- **Stage:** a flat cartoon test chamber in plain **Canvas 2D**: no WebGL and no 3D library. The static parts are painted once per resize, so each frame costs well under a millisecond. The whole game is about 22 KB of gzipped JavaScript.
 - **Leaderboard:** **Supabase**. The tables are locked, and the browser can only call three functions that check every score (see Hosting).
 - **Hosting:** **GitHub Pages**, built by an Action on every push.
 

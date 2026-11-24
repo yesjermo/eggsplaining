@@ -1,159 +1,69 @@
-import {
-  ACESFilmicToneMapping,
-  CanvasTexture,
-  CircleGeometry,
-  Color,
-  CylinderGeometry,
-  DirectionalLight,
-  DoubleSide,
-  DynamicDrawUsage,
-  Euler,
-  HemisphereLight,
-  InstancedMesh,
-  MathUtils,
-  Mesh,
-  MeshBasicMaterial,
-  MeshLambertMaterial,
-  Object3D,
-  PerspectiveCamera,
-  PlaneGeometry,
-  Scene,
-  SphereGeometry,
-  Sprite,
-  SpriteMaterial,
-  SRGBColorSpace,
-  TorusGeometry,
-  TubeGeometry,
-  CatmullRomCurve3,
-  Vector3,
-  WebGLRenderer,
-} from 'three';
-import { Egg, mulberry, type EggFrame } from './egg';
+import { Egg, type EggFrame } from './egg';
 import type { Look } from '../shared/look.js';
 import { drawHead2D } from '../face2d';
 
+// A flat, cartoon test chamber in plain Canvas 2D. No WebGL, no 3D library: the static parts
+// are painted once per resize into two cached layers (behind her and in front of her), and
+// each frame only draws those, her cut-out and a few particles.
+
 const CONFETTI_COLORS = ['#ff9eb5', '#b9a4ff', '#7fd6c2', '#ffc46b', '#8cc8ff', '#ffffff', '#ff8a6b'];
 const TUBE_R = 1.75;
-const FLOOR_Y = 0.36;
+const TUBE_H = 3.55;
+/** soft outline for the chamber, so she stays the boldest thing on screen */
+const LINE = '#8a78b8';
+const INK = '#2b2232';
 
-interface Shard {
-  mesh: Mesh;
-  v: Vector3;
-  spin: Vector3;
+interface Bit {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rot: number;
+  spin: number;
+  /** confetti flips: phase of the paper turning over */
+  flip: number;
+  color: string;
+  size: number;
+  landed: boolean;
+  /** shell shard outline, unit polygon */
+  poly?: [number, number][];
 }
 
-/** Lightweight Wii-style stage: Lambert lighting, no shadow maps, no environment maps. */
 export class Stage {
-  readonly renderer: WebGLRenderer;
-  readonly scene = new Scene();
-  readonly camera = new PerspectiveCamera(32, 1, 0.1, 100);
+  readonly canvas: HTMLCanvasElement;
   readonly egg: Egg;
-  private lampMat: MeshLambertMaterial;
-  private shards: Shard[] = [];
-  private confetti: InstancedMesh;
-  private confettiState: { p: Vector3; v: Vector3; r: Euler; spin: Vector3; landed: boolean }[] = [];
-  private confettiCount = 0;
-  private flash: Mesh;
-  private flashMat: MeshBasicMaterial;
-  private ghost: Sprite;
+  private ctx: CanvasRenderingContext2D;
+  private back = document.createElement('canvas');
+  private front = document.createElement('canvas');
   private ghostCanvas = document.createElement('canvas');
-  private ghostTex: CanvasTexture;
   private ghostAge = -1;
+  private ghostSeed = -1;
+  private shards: Bit[] = [];
+  private confetti: Bit[] = [];
+  private flash = 0;
   private shake = 0;
-  private baseDist = 10;
-  private lookY = 1.55;
-  private dummy = new Object3D();
-  private tmp = new Vector3();
   private push = 0;
+  private lamp = 0;
   private look: Look;
+  /** screen mapping */
+  private dpr = 1;
+  private ppu = 100;
+  private lookY = 1.5;
+  private W = 1;
+  private H = 1;
 
-  /** Loads her Blender head, then builds the stage. */
   static async create(canvas: HTMLCanvasElement, look: Look): Promise<Stage> {
-    return new Stage(canvas, look, await Egg.create(look));
+    return new Stage(canvas, look);
   }
 
-  private constructor(canvas: HTMLCanvasElement, look: Look, egg: Egg) {
+  private constructor(canvas: HTMLCanvasElement, look: Look) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d')!;
     this.look = look;
-    this.egg = egg;
-    const lowEnd = (navigator.hardwareConcurrency ?? 8) <= 4;
-    this.renderer = new WebGLRenderer({
-      canvas,
-      antialias: !lowEnd,
-      alpha: true,
-      powerPreference: 'default',
-      preserveDrawingBuffer: import.meta.env.DEV,
-    });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowEnd ? 1.25 : 1.75));
-    this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
-
-    this.scene.add(new HemisphereLight('#fbf8ff', '#ffd9c7', 2.1));
-    const key = new DirectionalLight('#fff6ee', 1.6);
-    key.position.set(4, 8, 6);
-    const rim = new DirectionalLight('#c9b8ff', 1.0);
-    rim.position.set(-5, 4, -6);
-    this.scene.add(key, rim);
-
-    this.lampMat = new MeshLambertMaterial({ color: '#ffb3c4', emissive: new Color('#ff6f91'), emissiveIntensity: 0.2 });
-    this.buildChamber();
-
-    this.egg.root.position.y = FLOOR_Y;
-    this.scene.add(this.egg.root);
-
-    // soft blob shadow instead of a shadow map
-    const sc = document.createElement('canvas');
-    sc.width = sc.height = 64;
-    const sctx = sc.getContext('2d')!;
-    const grad = sctx.createRadialGradient(32, 32, 2, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(60,40,80,0.35)');
-    grad.addColorStop(1, 'rgba(60,40,80,0)');
-    sctx.fillStyle = grad;
-    sctx.fillRect(0, 0, 64, 64);
-    const blob = new Mesh(new PlaneGeometry(2.2, 1.4), new MeshBasicMaterial({ map: new CanvasTexture(sc), transparent: true, depthWrite: false }));
-    blob.rotation.x = -Math.PI / 2;
-    blob.position.y = FLOOR_Y + 0.004;
-    this.scene.add(blob);
-
-    // shell shards
-    const shellMat = new MeshLambertMaterial({ color: '#fff3e2', side: DoubleSide });
-    const rnd = mulberry(21);
-    for (let i = 0; i < 14; i++) {
-      const g = new SphereGeometry(0.9, 4, 3, 0, 0.35 + rnd() * 0.3, 0, 0.3 + rnd() * 0.3);
-      g.translate(0, -0.9, 0);
-      const m = new Mesh(g, shellMat);
-      m.visible = false;
-      this.scene.add(m);
-      this.shards.push({ mesh: m, v: new Vector3(), spin: new Vector3() });
-    }
-
-    // confetti
-    const N = 110;
-    this.confetti = new InstancedMesh(new PlaneGeometry(0.11, 0.07), new MeshBasicMaterial({ side: DoubleSide }), N);
-    this.confetti.instanceMatrix.setUsage(DynamicDrawUsage);
-    const col = new Color();
-    for (let i = 0; i < N; i++) {
-      this.confetti.setColorAt(i, col.set(CONFETTI_COLORS[i % CONFETTI_COLORS.length]));
-      this.confettiState.push({ p: new Vector3(), v: new Vector3(), r: new Euler(), spin: new Vector3(), landed: false });
-    }
-    this.confetti.count = 0;
-    this.scene.add(this.confetti);
-
-    this.flashMat = new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false });
-    this.flash = new Mesh(new SphereGeometry(1, 16, 10), this.flashMat);
-    this.flash.position.y = 2.2;
-    this.scene.add(this.flash);
-
-    // her soul, drawn in the same hand-drawn style as the splash
+    this.egg = new Egg(look);
     this.ghostCanvas.width = 256;
     this.ghostCanvas.height = 320;
-    this.ghostTex = new CanvasTexture(this.ghostCanvas);
-    this.ghostTex.colorSpace = SRGBColorSpace;
-    this.ghost = new Sprite(new SpriteMaterial({ map: this.ghostTex, transparent: true, depthWrite: false, opacity: 0 }));
-    this.ghost.scale.set(1.6, 2.0, 1);
-    this.ghost.visible = false;
-    this.scene.add(this.ghost);
     this.drawGhost(0);
-
     this.resize();
   }
 
@@ -161,72 +71,6 @@ export class Stage {
     const c = this.ghostCanvas.getContext('2d')!;
     c.clearRect(0, 0, 256, 320);
     drawHead2D(c, this.look, 128, 170, 70, { eyes: 'closed', mouth: 'o', worry: 0.2, lookX: 0, lookY: 0, flush: 0 }, { ghost: true, wobble: seed });
-    this.ghostTex.needsUpdate = true;
-  }
-
-  private buildChamber() {
-    const base = new MeshLambertMaterial({ color: '#f6f2ff' });
-    const accent = new MeshLambertMaterial({ color: '#c8b8ff' });
-    const metal = new MeshLambertMaterial({ color: '#e2dcf0' });
-
-    const pedestal = new Mesh(new CylinderGeometry(2.05, 2.2, 0.36, 40), base);
-    pedestal.position.y = 0.18;
-    const ring = new Mesh(new TorusGeometry(2.06, 0.06, 8, 48), accent);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.36;
-    const floor = new Mesh(new CircleGeometry(TUBE_R, 40), new MeshLambertMaterial({ color: '#ffffff' }));
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = FLOOR_Y + 0.002;
-
-    const tubeH = 3.55;
-    const glass = new Mesh(
-      new CylinderGeometry(TUBE_R, TUBE_R, tubeH, 40, 1, true),
-      new MeshBasicMaterial({ color: '#eef6ff', transparent: true, opacity: 0.13, side: DoubleSide, depthWrite: false }),
-    );
-    glass.position.y = FLOOR_Y + tubeH / 2;
-    glass.renderOrder = 2;
-    const streakMat = new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.34, depthWrite: false, side: DoubleSide });
-    const streak = new Mesh(new CylinderGeometry(TUBE_R + 0.005, TUBE_R + 0.005, tubeH * 0.86, 6, 1, true, 0.55, 0.12), streakMat);
-    streak.position.y = glass.position.y;
-    streak.renderOrder = 3;
-
-    const topY = FLOOR_Y + tubeH;
-    const cap = new Mesh(new CylinderGeometry(2.0, 2.05, 0.32, 40), base);
-    cap.position.y = topY + 0.16;
-    const capRing = new Mesh(new TorusGeometry(2.03, 0.06, 8, 48), accent);
-    capRing.rotation.x = Math.PI / 2;
-    capRing.position.y = topY;
-    const dome = new Mesh(new SphereGeometry(0.7, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2), metal);
-    dome.scale.y = 0.45;
-    dome.position.y = topY + 0.32;
-    const lamp = new Mesh(new SphereGeometry(0.16, 12, 8), this.lampMat);
-    lamp.position.set(0, topY + 0.68, 0);
-
-    const hose = new Mesh(
-      new TubeGeometry(
-        new CatmullRomCurve3([
-          new Vector3(-1.4, topY + 0.3, 0.2),
-          new Vector3(-2.5, topY + 0.6, 0.3),
-          new Vector3(-3.0, topY - 0.4, 0.5),
-          new Vector3(-2.8, 2.3, 0.6),
-        ]),
-        28,
-        0.09,
-        8,
-      ),
-      accent,
-    );
-    // the gauge exists, but it is wearing a little cover: read her, not the dial
-    const cover = new Mesh(new SphereGeometry(0.5, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), new MeshLambertMaterial({ color: '#ffd6e0' }));
-    cover.rotation.x = Math.PI / 2 - 0.15;
-    cover.scale.set(1, 0.55, 1);
-    cover.position.set(-2.8, 1.9, 0.64);
-    const stand = new Mesh(new CylinderGeometry(0.05, 0.08, 1.55, 8), metal);
-    stand.position.set(-2.8, 0.9, 0.6);
-    const foot = new Mesh(new CylinderGeometry(0.35, 0.4, 0.08, 20), base);
-    foot.position.set(-2.8, 0.08, 0.6);
-
-    this.scene.add(pedestal, ring, floor, glass, streak, cap, capRing, dome, lamp, hose, cover, stand, foot);
   }
 
   setLook(look: Look) {
@@ -235,161 +79,428 @@ export class Stage {
     this.drawGhost(0);
   }
 
+  // ---------- mapping ----------
+
+  private sx(x: number) {
+    return this.W / 2 + x * this.ppu;
+  }
+  private sy(y: number) {
+    return this.H / 2 - (y - this.lookY) * this.ppu;
+  }
+
   resize() {
-    const canvas = this.renderer.domElement;
-    const w = canvas.clientWidth || window.innerWidth;
-    const h = canvas.clientHeight || window.innerHeight;
-    this.renderer.setSize(w, h, false);
-    const aspect = w / h;
-    this.camera.aspect = aspect;
-    const portrait = aspect < 0.8;
-    const halfW = portrait ? 2.1 : 3.1;
-    const tanV = Math.tan(MathUtils.degToRad(this.camera.fov / 2));
-    this.baseDist = Math.max(halfW / (tanV * aspect), 2.75 / tanV);
-    this.lookY = portrait ? 1.6 : 1.75;
-    this.camera.updateProjectionMatrix();
+    const cw = this.canvas.clientWidth || window.innerWidth;
+    const ch = this.canvas.clientHeight || window.innerHeight;
+    const lowEnd = (navigator.hardwareConcurrency ?? 8) <= 4;
+    this.dpr = Math.min(window.devicePixelRatio || 1, lowEnd ? 1.5 : 2);
+    // a hidden or minimised window can report 0x0; never make zero-size layers
+    if (!cw || !ch) return;
+    this.W = Math.round(cw * this.dpr);
+    this.H = Math.round(ch * this.dpr);
+    this.canvas.width = this.W;
+    this.canvas.height = this.H;
+    const portrait = cw / ch < 0.8;
+    // fit the whole chamber, lamp to pedestal, between the score and the Hold button
+    const halfW = portrait ? 2.45 : 3.4;
+    this.ppu = Math.min(this.W / (2 * halfW), this.H / 7.1);
+    this.lookY = portrait ? 1.35 : 1.45;
+    // paint her at about the size she appears, so outlines stay crisp without wasting pixels
+    this.egg.setResolution(this.ppu * 1.05);
+    for (const c of [this.back, this.front]) {
+      c.width = this.W;
+      c.height = this.H;
+    }
+    this.paintChamber();
   }
 
   headScreen(): { x: number; y: number } {
-    this.egg.headWorld(this.tmp);
-    this.tmp.project(this.camera);
-    const c = this.renderer.domElement;
-    return { x: ((this.tmp.x + 1) / 2) * c.clientWidth, y: ((1 - this.tmp.y) / 2) * c.clientHeight };
+    const p = this.egg.headTop();
+    return { x: this.sx(p.x) / this.dpr, y: this.sy(p.y) / this.dpr };
   }
+
+  // ---------- the chamber, cached ----------
+
+  private paintChamber() {
+    const u = this.ppu;
+    const X = (x: number) => this.sx(x);
+    const Y = (y: number) => this.sy(y);
+    const lw = Math.max(1.5, u * 0.035);
+    const line = (c: CanvasRenderingContext2D, w = lw, color = LINE) => {
+      c.lineWidth = w;
+      c.strokeStyle = color;
+      c.stroke();
+    };
+    const ell = (c: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, a0 = 0, a1 = Math.PI * 2) => {
+      c.beginPath();
+      c.ellipse(X(x), Y(y), rx * u, ry * u, 0, a0, a1);
+    };
+    const RY = 0.3; // how squashed the circles look from slightly above
+
+    // ---- behind her
+    const b = this.back.getContext('2d')!;
+    b.clearRect(0, 0, this.W, this.H);
+    b.lineJoin = b.lineCap = 'round';
+
+    // gauge on a stand, wearing a little cover: read her, not the dial
+    const gx = -2.85;
+    b.beginPath();
+    b.moveTo(X(gx), Y(0.05));
+    b.lineTo(X(gx), Y(1.6));
+    line(b, u * 0.12, LINE);
+    line(b, u * 0.07, '#e6e0f2');
+    ell(b, gx, 0.04, 0.38, 0.11);
+    b.fillStyle = '#f6f2ff';
+    b.fill();
+    line(b);
+    b.beginPath();
+    b.moveTo(X(gx - 0.5), Y(1.62));
+    b.ellipse(X(gx), Y(1.62), 0.5 * u, 0.5 * u, 0, Math.PI, Math.PI * 2);
+    b.closePath();
+    b.fillStyle = '#ffd6e0';
+    b.fill();
+    line(b);
+    // a tiny bow on the cover, because of course
+    b.fillStyle = '#ff9eb5';
+    for (const s of [-1, 1]) {
+      b.beginPath();
+      b.moveTo(X(gx), Y(2.12));
+      b.lineTo(X(gx + s * 0.2), Y(2.24));
+      b.lineTo(X(gx + s * 0.2), Y(2.02));
+      b.closePath();
+      b.fill();
+      line(b, lw * 0.8);
+    }
+    // hose from the cap to the gauge
+    b.beginPath();
+    b.moveTo(X(-1.3), Y(TUBE_H + 0.32));
+    b.bezierCurveTo(X(-2.4), Y(TUBE_H + 0.9), X(-3.15), Y(TUBE_H + 0.2), X(gx), Y(2.2));
+    line(b, u * 0.2, LINE);
+    line(b, u * 0.13, '#cfc1ff');
+
+    // pedestal
+    b.beginPath();
+    b.moveTo(X(-2.15), Y(0));
+    b.lineTo(X(-2.3), Y(-0.42));
+    b.ellipse(X(0), Y(-0.42), 2.3 * u, 2.3 * RY * u, 0, Math.PI, 0, true);
+    b.lineTo(X(2.15), Y(0));
+    b.closePath();
+    b.fillStyle = '#efe9fb';
+    b.fill();
+    line(b);
+    ell(b, 0, 0, 2.15, 2.15 * RY);
+    b.fillStyle = '#f8f5ff';
+    b.fill();
+    line(b);
+    ell(b, 0, 0, 2.0, 2.0 * RY);
+    line(b, u * 0.07, '#c8b8ff');
+    ell(b, 0, 0, TUBE_R * 0.93, TUBE_R * 0.93 * RY);
+    b.fillStyle = '#ffffff';
+    b.fill();
+
+    // back of the glass
+    b.beginPath();
+    b.rect(X(-TUBE_R), Y(TUBE_H), 2 * TUBE_R * u, TUBE_H * u);
+    b.fillStyle = 'rgba(232,240,255,0.32)';
+    b.fill();
+    ell(b, 0, TUBE_H, TUBE_R, TUBE_R * RY, Math.PI, Math.PI * 2);
+    line(b, lw * 0.7, 'rgba(138,120,184,0.5)');
+
+    // ---- in front of her
+    const f = this.front.getContext('2d')!;
+    f.clearRect(0, 0, this.W, this.H);
+    f.lineJoin = f.lineCap = 'round';
+    // front of the glass: sides, a front rim and two cartoon shine streaks
+    f.beginPath();
+    f.moveTo(X(-TUBE_R), Y(0));
+    f.lineTo(X(-TUBE_R), Y(TUBE_H));
+    f.moveTo(X(TUBE_R), Y(0));
+    f.lineTo(X(TUBE_R), Y(TUBE_H));
+    line(f, lw, 'rgba(138,120,184,0.7)');
+    ell(f, 0, 0, TUBE_R, TUBE_R * RY, 0, Math.PI);
+    line(f, lw * 0.8, 'rgba(138,120,184,0.55)');
+    f.fillStyle = 'rgba(255,255,255,0.55)';
+    f.beginPath();
+    f.roundRect(X(1.12), Y(TUBE_H - 0.3), 0.16 * u, (TUBE_H - 0.9) * u, 0.08 * u);
+    f.fill();
+    f.beginPath();
+    f.roundRect(X(1.36), Y(TUBE_H - 0.5), 0.07 * u, 1.2 * u, 0.04 * u);
+    f.fill();
+    // cap with its rim, dome and lamp socket
+    f.beginPath();
+    f.moveTo(X(-2.05), Y(TUBE_H));
+    f.lineTo(X(-2.0), Y(TUBE_H + 0.32));
+    f.ellipse(X(0), Y(TUBE_H + 0.32), 2.0 * u, 2.0 * RY * u, 0, Math.PI, 0);
+    f.lineTo(X(2.05), Y(TUBE_H));
+    f.ellipse(X(0), Y(TUBE_H), 2.05 * u, 2.05 * RY * u, 0, 0, Math.PI);
+    f.closePath();
+    f.fillStyle = '#efe9fb';
+    f.fill();
+    line(f);
+    ell(f, 0, TUBE_H, 2.05, 2.05 * RY, 0, Math.PI);
+    line(f, u * 0.07, '#c8b8ff');
+    ell(f, 0, TUBE_H + 0.32, 2.0, 2.0 * RY);
+    f.fillStyle = '#f8f5ff';
+    f.fill();
+    line(f);
+    f.beginPath();
+    f.ellipse(X(0), Y(TUBE_H + 0.36), 0.7 * u, 0.4 * u, 0, Math.PI, Math.PI * 2);
+    f.closePath();
+    f.fillStyle = '#e6e0f2';
+    f.fill();
+    line(f);
+  }
+
+  // ---------- effects ----------
 
   /** big = run-ending pop; small = blitz pop */
   pop(reduced: boolean, big = true) {
     const rnd = Math.random;
     this.shake = reduced ? 0 : big ? 0.35 : 0.2;
-    this.flashMat.opacity = reduced ? 0.3 : 0.8;
-    this.flash.scale.setScalar(0.6);
-    for (const s of this.shards) {
+    this.flash = reduced ? 0.3 : 0.8;
+    const eggY = this.egg.centerY;
+    this.shards = [];
+    for (let i = 0; i < 12; i++) {
       const a = rnd() * Math.PI * 2;
-      s.mesh.visible = true;
-      s.mesh.position.set(Math.sin(a) * 0.6, FLOOR_Y + 1.4 + rnd() * 1.1, Math.cos(a) * 0.6);
-      s.mesh.rotation.set(rnd() * 6, rnd() * 6, rnd() * 6);
-      s.mesh.scale.setScalar(0.5 + rnd() * 0.5);
-      const sp = reduced ? 2 : 5;
-      s.v.set(Math.sin(a) * sp * (0.5 + rnd()), 3 + rnd() * (reduced ? 2 : 5), Math.cos(a) * sp * (0.5 + rnd()));
-      s.spin.set(rnd() * 12 - 6, rnd() * 12 - 6, rnd() * 12 - 6);
+      const sp = reduced ? 1.5 : 4;
+      const n = 3 + Math.floor(rnd() * 2);
+      const poly: [number, number][] = [];
+      for (let j = 0; j < n; j++) {
+        const ang = (j / n) * Math.PI * 2 + rnd() * 0.6;
+        const r = 0.6 + rnd() * 0.4;
+        poly.push([Math.cos(ang) * r, Math.sin(ang) * r]);
+      }
+      this.shards.push({
+        x: Math.cos(a) * 0.5,
+        y: eggY + 0.4 + rnd() * 0.6,
+        vx: Math.cos(a) * sp * (0.5 + rnd()),
+        vy: 2.5 + rnd() * (reduced ? 2 : 4),
+        rot: rnd() * 6,
+        spin: rnd() * 12 - 6,
+        flip: 0,
+        color: '#fff6e8',
+        size: 0.1 + rnd() * 0.1,
+        landed: false,
+        poly,
+      });
     }
-    this.confettiCount = reduced ? 40 : big ? this.confettiState.length : 60;
-    this.confetti.count = this.confettiCount;
-    for (let i = 0; i < this.confettiCount; i++) {
-      const c = this.confettiState[i];
+    const count = reduced ? 30 : big ? 90 : 45;
+    this.confetti = [];
+    for (let i = 0; i < count; i++) {
       const a = rnd() * Math.PI * 2;
-      const r = rnd() * 0.5;
-      c.p.set(Math.sin(a) * r, FLOOR_Y + 2.0 + rnd() * 0.6, Math.cos(a) * r);
-      const sp = (reduced ? 1.5 : 3.5) * (0.4 + rnd());
-      c.v.set(Math.sin(a) * sp, (reduced ? 2 : 5) + rnd() * 4, Math.cos(a) * sp);
-      c.r.set(rnd() * 6, rnd() * 6, rnd() * 6);
-      c.spin.set(rnd() * 14 - 7, rnd() * 14 - 7, rnd() * 14 - 7);
-      c.landed = false;
+      const sp = (reduced ? 1.2 : 3) * (0.4 + rnd());
+      this.confetti.push({
+        x: Math.cos(a) * rnd() * 0.5,
+        y: eggY + 0.6 + rnd() * 0.5,
+        vx: Math.cos(a) * sp,
+        vy: (reduced ? 2 : 4.5) + rnd() * 3.5,
+        rot: rnd() * 6,
+        spin: rnd() * 10 - 5,
+        flip: rnd() * 6,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        size: 0.05 + rnd() * 0.04,
+        landed: false,
+      });
     }
     if (big) this.ghostAge = 0;
   }
 
   reset() {
-    for (const s of this.shards) s.mesh.visible = false;
-    this.confettiCount = 0;
-    this.confetti.count = 0;
+    this.shards = [];
+    this.confetti = [];
     this.ghostAge = -1;
-    this.ghost.visible = false;
   }
 
+  private step(bits: Bit[], dt: number, g: number, drag: number) {
+    const max = TUBE_R - 0.1;
+    for (const p of bits) {
+      if (p.landed) continue;
+      p.vy -= g * dt;
+      p.vx *= 1 - drag * dt;
+      p.vy *= 1 - drag * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += p.spin * dt;
+      p.flip += dt * 9;
+      if (Math.abs(p.x) > max) {
+        p.x = Math.sign(p.x) * max;
+        p.vx *= -0.4;
+      }
+      if (p.y > TUBE_H - 0.1) {
+        p.y = TUBE_H - 0.1;
+        p.vy = -Math.abs(p.vy) * 0.3;
+      }
+      if (p.y <= 0.02) {
+        p.y = 0.02;
+        if (Math.abs(p.vy) < 1.2) {
+          p.landed = true;
+          p.flip = Math.PI / 2.4;
+        }
+        p.vy = Math.abs(p.vy) * 0.3;
+        p.vx *= 0.5;
+        p.spin *= 0.5;
+      }
+    }
+  }
+
+  // ---------- per frame ----------
+
   frame(f: EggFrame) {
-    const dt = f.dt;
+    const dt = Math.min(f.dt, 0.05);
     this.egg.update(f);
-    this.lampMat.emissiveIntensity = f.holding ? 0.8 + Math.sin(f.time * 10) * 0.4 : 0.15;
+    this.step(this.shards, dt, 14, 0.3);
+    this.step(this.confetti, dt, 6, 1.6);
+    this.flash = Math.max(0, this.flash - dt * 4);
+    this.shake = Math.max(0, this.shake - dt);
+    const pushTarget = f.holding && !f.reduced ? f.tension : 0;
+    this.push += (pushTarget - this.push) * Math.min(1, dt * 2);
+    this.lamp += ((f.holding ? 1 : 0) - this.lamp) * Math.min(1, dt * 8);
 
-    for (const s of this.shards) {
-      if (!s.mesh.visible) continue;
-      s.v.y -= 16 * dt;
-      s.mesh.position.addScaledVector(s.v, dt);
-      s.mesh.rotation.x += s.spin.x * dt;
-      s.mesh.rotation.y += s.spin.y * dt;
-      contain(s.mesh.position, s.v, 0.4);
-      if (s.mesh.position.y < FLOOR_Y + 0.03) {
-        s.mesh.position.y = FLOOR_Y + 0.03;
-        s.v.multiplyScalar(0.3);
-        s.v.y = Math.abs(s.v.y) * 0.3;
-        s.spin.multiplyScalar(0.5);
-      }
-    }
+    if (!this.back.width) this.resize();
+    if (!this.back.width) return;
+    const c = this.ctx;
+    const u = this.ppu;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, this.W, this.H);
+    // camera: lean in on long holds, shake on a pop, drift a touch
+    const sk = this.shake * this.shake * 0.9 * u;
+    const zoom = 1 + this.push * 0.07;
+    const fx = this.sx(0);
+    const fy = this.sy(this.egg.centerY);
+    c.translate(fx + (Math.random() - 0.5) * sk + Math.sin(f.time * 0.25) * (f.reduced ? 0 : 0.05 * u), fy + (Math.random() - 0.5) * sk);
+    c.scale(zoom, zoom);
+    c.translate(-fx, -fy);
 
-    for (let i = 0; i < this.confettiCount; i++) {
-      const c = this.confettiState[i];
-      if (!c.landed) {
-        c.v.y -= 7 * dt;
-        c.v.multiplyScalar(1 - 1.6 * dt);
-        c.p.addScaledVector(c.v, dt);
-        c.r.x += c.spin.x * dt;
-        c.r.y += c.spin.y * dt;
-        c.r.z += c.spin.z * dt;
-        contain(c.p, c.v, 0.2);
-        if (c.p.y > FLOOR_Y + 3.4) {
-          c.p.y = FLOOR_Y + 3.4;
-          c.v.y = -Math.abs(c.v.y) * 0.3;
-        }
-        if (c.p.y <= FLOOR_Y + 0.01) {
-          c.p.y = FLOOR_Y + 0.01 + (i % 5) * 0.002;
-          c.r.set(-Math.PI / 2, 0, c.r.z);
-          c.landed = true;
-        }
-      }
-      this.dummy.position.copy(c.p);
-      this.dummy.rotation.copy(c.r);
-      this.dummy.updateMatrix();
-      this.confetti.setMatrixAt(i, this.dummy.matrix);
-    }
-    if (this.confettiCount) this.confetti.instanceMatrix.needsUpdate = true;
+    c.drawImage(this.back, 0, 0);
 
-    if (this.flashMat.opacity > 0) {
-      this.flashMat.opacity = Math.max(0, this.flashMat.opacity - dt * 4);
-      this.flash.scale.multiplyScalar(1 + dt * 9);
-    }
+    // soft blob shadow that shrinks as she hops
+    const T = this.egg.t;
+    const lift = Math.max(0, T.y - this.egg.centerY * T.sy);
+    const sh = Math.max(0.4, 1 - lift * 0.8);
+    c.fillStyle = 'rgba(70,45,100,0.16)';
+    c.beginPath();
+    c.ellipse(this.sx(T.x), this.sy(0.01), 1.0 * u * sh * T.sx, 0.2 * u * sh, 0, 0, Math.PI * 2);
+    c.fill();
 
-    // soul drifts up out of her after a run-ending pop, swaying like the splash
+    this.drawBits(c, this.confetti.filter((p) => p.landed));
+    this.drawEgg(c);
+    this.drawBits(c, this.shards);
+    this.drawBits(c, this.confetti.filter((p) => !p.landed));
+
+    c.drawImage(this.front, 0, 0);
+
+    // her soul drifts up after a run-ending pop, swaying like the splash
     if (this.ghostAge >= 0) {
       this.ghostAge += dt;
       const a = this.ghostAge;
       const rise = Math.min(1, Math.max(0, (a - 0.25) / 1.2));
-      const ease = 1 - Math.pow(1 - rise, 3);
-      this.ghost.visible = rise > 0;
-      (this.ghost.material as SpriteMaterial).opacity = Math.min(0.85, rise * 1.5);
-      this.ghost.position.set(Math.sin(a * 2.2) * 0.25 * (f.reduced ? 0.3 : 1), FLOOR_Y + 2.1 + ease * 1.1, 0.4);
-      this.ghost.material.rotation = Math.sin(a * 1.7) * 0.12 * (f.reduced ? 0.3 : 1);
-      // hand-drawn line boil at ~8 fps
-      const seed = Math.floor(a * 8);
-      if (seed !== Math.floor((a - dt) * 8) && !f.reduced) this.drawGhost(seed);
+      const e = 1 - Math.pow(1 - rise, 3);
+      const seed = f.reduced ? 0 : Math.floor(a * 8);
+      if (seed !== this.ghostSeed) {
+        this.ghostSeed = seed;
+        this.drawGhost(seed);
+      }
+      if (rise > 0) {
+        c.save();
+        c.globalAlpha = Math.min(0.85, rise * 1.5);
+        c.translate(this.sx(Math.sin(a * 2.2) * 0.25 * (f.reduced ? 0.3 : 1)), this.sy(2.1 + e * 0.9));
+        c.rotate(Math.sin(a * 1.7) * 0.12 * (f.reduced ? 0.3 : 1));
+        const gw = 1.6 * u;
+        c.drawImage(this.ghostCanvas, -gw / 2, -gw * 0.625, gw, gw * 1.25);
+        c.restore();
+      }
     }
 
-    const pushTarget = f.holding && !f.reduced ? f.tension * 0.9 : 0;
-    this.push += (pushTarget - this.push) * Math.min(1, dt * 2);
-    this.shake = Math.max(0, this.shake - dt);
-    const sk = this.shake * this.shake * 0.9;
-    this.camera.position.set(
-      Math.sin(f.time * 0.25) * (f.reduced ? 0 : 0.25) + (Math.random() - 0.5) * sk,
-      this.lookY + 0.9 + (Math.random() - 0.5) * sk,
-      this.baseDist - this.push,
-    );
-    this.camera.lookAt(0, this.lookY, 0);
-    this.renderer.render(this.scene, this.camera);
+
+    // the lamp on top glows while you hold
+    const lx = this.sx(0);
+    const ly = this.sy(TUBE_H + 0.86);
+    const pulse = this.lamp * (0.8 + Math.sin(f.time * 10) * 0.2);
+    if (pulse > 0.02) {
+      const g = c.createRadialGradient(lx, ly, 0, lx, ly, u * 0.7);
+      g.addColorStop(0, `rgba(255,111,145,${0.45 * pulse})`);
+      g.addColorStop(1, 'rgba(255,111,145,0)');
+      c.fillStyle = g;
+      c.fillRect(lx - u, ly - u, 2 * u, 2 * u);
+    }
+    c.beginPath();
+    c.arc(lx, ly, 0.17 * u, 0, Math.PI * 2);
+    c.fillStyle = pulse > 0.02 ? `rgb(255,${Math.round(179 - 60 * pulse)},${Math.round(196 - 50 * pulse)})` : '#ffb3c4';
+    c.fill();
+    c.lineWidth = Math.max(1.5, u * 0.035);
+    c.strokeStyle = LINE;
+    c.stroke();
+    c.fillStyle = 'rgba(255,255,255,0.8)';
+    c.beginPath();
+    c.arc(lx - 0.05 * u, ly - 0.05 * u, 0.05 * u, 0, Math.PI * 2);
+    c.fill();
+
+    if (this.flash > 0) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      const r = (1 - this.flash) * 4 * u + u;
+      const g = c.createRadialGradient(fx, fy, 0, fx, fy, r);
+      g.addColorStop(0, `rgba(255,255,255,${this.flash})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, this.W, this.H);
+    }
+  }
+
+  private drawEgg(c: CanvasRenderingContext2D) {
+    const e = this.egg;
+    const T = e.t;
+    const k = this.ppu / e.ppu;
+    const a = e.anchor;
+    c.save();
+    c.translate(this.sx(T.x), this.sy(T.y));
+    c.rotate(-T.rot);
+    c.scale(T.sx * k, T.sy * k);
+    // canvas pixel of her centre, relative to the anchor on the floor
+    c.drawImage(e.canvas, -a.x, -(a.y - e.centerY * e.ppu));
+    if (T.sweat) {
+      // a cartoon sweat drop sliding down beside her head
+      const U = e.ppu;
+      const x = T.sweat.x * U;
+      const y = -T.sweat.y * U;
+      const r = 0.07 * U;
+      c.beginPath();
+      c.moveTo(x, y - r * 2.2);
+      c.quadraticCurveTo(x + r * 1.1, y - r * 0.4, x + r, y);
+      c.arc(x, y, r, 0, Math.PI);
+      c.quadraticCurveTo(x - r * 1.1, y - r * 0.4, x, y - r * 2.2);
+      c.fillStyle = '#9fe0ff';
+      c.fill();
+      c.lineWidth = r * 0.45;
+      c.strokeStyle = INK;
+      c.stroke();
+    }
+    c.restore();
+  }
+
+  private drawBits(c: CanvasRenderingContext2D, bits: Bit[]) {
+    const u = this.ppu;
+    for (const p of bits) {
+      c.save();
+      c.translate(this.sx(p.x), this.sy(p.y));
+      c.rotate(p.rot);
+      const s = p.size * u;
+      if (p.poly) {
+        c.beginPath();
+        p.poly.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s)));
+        c.closePath();
+        c.fillStyle = p.color;
+        c.fill();
+        c.lineWidth = Math.max(1.2, s * 0.25);
+        c.strokeStyle = INK;
+        c.lineJoin = 'round';
+        c.stroke();
+      } else {
+        // paper turning over: squash one axis
+        c.scale(1, Math.max(0.15, Math.abs(Math.cos(p.flip))));
+        c.fillStyle = p.color;
+        c.fillRect(-s, -s * 0.6, s * 2, s * 1.2);
+      }
+      c.restore();
+    }
   }
 }
 
-function contain(p: Vector3, v: Vector3, bounce: number) {
-  const r = Math.hypot(p.x, p.z);
-  const max = TUBE_R - 0.08;
-  if (r > max) {
-    const nx = p.x / r;
-    const nz = p.z / r;
-    p.x = nx * max;
-    p.z = nz * max;
-    const dot = v.x * nx + v.z * nz;
-    if (dot > 0) {
-      v.x -= (1 + bounce) * dot * nx;
-      v.z -= (1 + bounce) * dot * nz;
-    }
-  }
-}

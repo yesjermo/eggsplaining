@@ -1,4 +1,4 @@
-// Mii-style 2D face drawing. One renderer feeds the 3D egg's face texture, the Mii Maker
+// Mii-style 2D face drawing. One renderer feeds her cartoon cut-out, the Mii Maker
 // option previews, leaderboard avatars and the hand-drawn splash ghost.
 
 import type { Look } from './shared/look.js';
@@ -63,13 +63,16 @@ export function drawFace(ctx: CanvasRenderingContext2D, look: Look, ex: FaceExpr
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   const lw = 0.065;
+  // the cartoon look: bigger sparkly eyes and rounder blush (not for the sketchy ghost)
+  const cute = !o.ghost && !o.ink;
 
-  if (!o.ghost && (look.blush || ex.flush > 0)) {
-    const a = (look.blush ? 0.22 : 0) + ex.flush * 0.55;
+  if (!o.ghost && (look.blush || ex.flush > 0 || cute)) {
+    const a = (look.blush ? 0.22 : cute ? 0.14 : 0) + ex.flush * 0.55;
     ctx.fillStyle = `rgba(255,105,140,${Math.min(0.8, a)})`;
     for (const sx of [-1, 1]) {
       ctx.beginPath();
-      ctx.ellipse(sx * 0.62, 0.3, 0.2, 0.11, 0, 0, Math.PI * 2);
+      if (cute) ctx.ellipse(sx * 0.6, 0.27, 0.17, 0.13, 0, 0, Math.PI * 2);
+      else ctx.ellipse(sx * 0.62, 0.3, 0.2, 0.11, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -89,12 +92,12 @@ export function drawFace(ctx: CanvasRenderingContext2D, look: Look, ex: FaceExpr
   }
 
   const gap = 0.4 * look.eyeGap;
-  const er = 0.16 * look.eyeSize;
+  const er = 0.16 * look.eyeSize * (cute ? 1.3 : 1);
   const ey = -0.05;
   for (const sx of [-1, 1]) {
     ctx.save();
     ctx.translate(sx * gap + jit(W, sx, 0.012), ey + jit(W, sx + 5, 0.012));
-    drawEye(ctx, look.eyes, ex, er, sx, ink, lw, o.ghost === true);
+    drawEye(ctx, look.eyes, ex, er, sx, ink, lw, o.ghost === true, cute);
     ctx.restore();
   }
 
@@ -133,7 +136,18 @@ export function drawFace(ctx: CanvasRenderingContext2D, look: Look, ex: FaceExpr
   ctx.restore();
 }
 
-function drawEye(ctx: CanvasRenderingContext2D, style: string, ex: FaceExpr, r: number, sx: number, ink: string, lw: number, ghost: boolean) {
+/** Two catchlights, big top-right and small bottom-left, the classic cute-eye shine. */
+function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(x + r * 0.26, y - r * 0.22, r * 0.24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x - r * 0.22, y + r * 0.24, r * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawEye(ctx: CanvasRenderingContext2D, style: string, ex: FaceExpr, r: number, sx: number, ink: string, lw: number, ghost: boolean, cute = false) {
   ctx.strokeStyle = ink;
   ctx.fillStyle = ink;
   ctx.lineWidth = lw;
@@ -157,7 +171,7 @@ function drawEye(ctx: CanvasRenderingContext2D, style: string, ex: FaceExpr, r: 
 
   switch (style) {
     case 'sleepy': {
-      const h = r * 0.48 * wide;
+      const h = r * (cute ? 0.62 : 0.48) * wide;
       ctx.beginPath();
       ctx.ellipse(0, 0, r * 1.05, h, 0, 0, Math.PI * 2);
       ctx.fillStyle = whites;
@@ -166,9 +180,10 @@ function drawEye(ctx: CanvasRenderingContext2D, style: string, ex: FaceExpr, r: 
       ctx.clip();
       ctx.fillStyle = ink;
       ctx.beginPath();
-      ctx.arc(px, py + h * 0.2, r * 0.62, 0, Math.PI * 2);
+      ctx.arc(px, py + h * 0.2, r * (cute ? 0.7 : 0.62), 0, Math.PI * 2);
       ctx.fill();
-      if (!ghost) {
+      if (cute) sparkle(ctx, px, py + h * 0.1, r * 0.75);
+      else if (!ghost) {
         ctx.fillStyle = '#fff';
         ctx.beginPath();
         ctx.arc(px + r * 0.22, py - h * 0.15, r * 0.14, 0, Math.PI * 2);
@@ -185,6 +200,7 @@ function drawEye(ctx: CanvasRenderingContext2D, style: string, ex: FaceExpr, r: 
       ctx.beginPath();
       ctx.ellipse(px * 0.5, py * 0.5, r * 0.42 * wide, r * 0.55 * wide, 0, 0, Math.PI * 2);
       ctx.fill();
+      if (cute) sparkle(ctx, px * 0.5, py * 0.5, r * 0.45);
       break;
     default: {
       const ry = (style === 'almond' ? r * 0.72 : r * 1.12) * wide;
@@ -199,9 +215,10 @@ function drawEye(ctx: CanvasRenderingContext2D, style: string, ex: FaceExpr, r: 
       ctx.clip();
       ctx.fillStyle = ink;
       ctx.beginPath();
-      ctx.arc(px, py + ry * 0.12, r * 0.6, 0, Math.PI * 2);
+      ctx.arc(px, py + ry * 0.12, r * (cute ? 0.68 : 0.6), 0, Math.PI * 2);
       ctx.fill();
-      if (!ghost) {
+      if (cute) sparkle(ctx, px, py + ry * 0.05, r * 0.7);
+      else if (!ghost) {
         ctx.fillStyle = '#fff';
         ctx.beginPath();
         ctx.arc(px + r * 0.2, py - ry * 0.12, r * 0.16, 0, Math.PI * 2);
@@ -382,6 +399,29 @@ export function drawBangs(ctx: CanvasRenderingContext2D, look: Look, s: number, 
   };
   switch (look.bangs) {
     case 'wispy': {
+      if (!o.ghost && !o.ink) {
+        // cartoon curtain bangs: two clean halves from a centre part, each ending in soft points
+        for (const sx of [-1, 1]) {
+          const tips: [number, number][] = [
+            [0.3, 0.3],
+            [0.56, 0.4],
+            [0.82, 0.5],
+            [1.04, 0.66],
+          ];
+          ctx.beginPath();
+          ctx.moveTo(sx * 0.06, -0.04);
+          ctx.quadraticCurveTo(sx * 0.1, 0.16, sx * tips[0][0], tips[0][1]);
+          for (let i = 1; i < tips.length; i++) {
+            const [x0] = tips[i - 1];
+            const [x1, y1] = tips[i];
+            ctx.quadraticCurveTo(sx * (x0 + x1) * 0.5, y1 * 0.45, sx * x1, y1);
+          }
+          ctx.lineTo(sx * 1.12, -0.04);
+          ctx.closePath();
+          ctx.fill();
+        }
+        break;
+      }
       // parted in the middle, so a sliver of forehead shows between the two sides
       const xs = [-0.95, -0.74, -0.54, -0.36, 0.36, 0.54, 0.74, 0.95];
       xs.forEach((x, i) => {
