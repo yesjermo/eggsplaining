@@ -725,9 +725,14 @@ export function drawHead2D(
       }
       c.fill();
     }
-    if (toon && !o.back && NATURAL_HAIR.has(look.hair)) {
-      naturalHair(c, look, cx, cy, w, h, capY, hairFill);
+    if ((toon || ghost) && !o.back && NATURAL_HAIR.has(look.hair)) {
+      // the sketchy ghost gets the same natural hair, with a soft pencil edge instead of a cel outline
+      naturalHair(c, look, cx, cy, w, h, capY, hairFill, ghost ? 'rgba(90,86,100,0.55)' : undefined);
       if (look.bangs === 'blunt' || look.bangs === 'side') drawBangs(c, look, faceS * 1.3, cx, capY, o);
+      return;
+    }
+    if (o.back && NATURAL_HAIR.has(look.hair)) {
+      naturalHairBack(c, look, cx, cy, w, h, hairFill, o.ink ?? (toon ? undefined : 'rgba(90,86,100,0.6)'));
       return;
     }
     if (look.hair !== 'buzz') {
@@ -869,7 +874,7 @@ const NATURAL_HAIR = new Set(['lowbun', 'bun', 'ponytail', 'bob', 'long']);
  * sweeps down each side of her face as curtain bangs and ends in soft tapered tips by her
  * cheeks, with a few lighter strand lines following the flow instead of a plastic shine.
  */
-function naturalHair(c: CanvasRenderingContext2D, look: Look, cx: number, cy: number, w: number, h: number, capY: number, fill: string) {
+function naturalHair(c: CanvasRenderingContext2D, look: Look, cx: number, cy: number, w: number, h: number, capY: number, fill: string, edge?: string) {
   const pt = (t: number, gx: number, gy = gx): [number, number] => [
     cx + Math.sin(t) * (1 - 0.12 * Math.cos(t)) * w * gx,
     cy - Math.cos(t) * h * gy,
@@ -919,6 +924,12 @@ function naturalHair(c: CanvasRenderingContext2D, look: Look, cx: number, cy: nu
   }
   c.closePath();
   c.fill();
+  if (edge) {
+    c.strokeStyle = edge;
+    c.lineWidth = Math.max(1.2, w * 0.035);
+    c.lineJoin = 'round';
+    c.stroke();
+  }
 
   // strands: a few lighter lines that follow the hair's flow from the part
   c.save();
@@ -950,6 +961,90 @@ function naturalHair(c: CanvasRenderingContext2D, look: Look, cx: number, cy: nu
   }
   c.stroke();
   c.restore();
+}
+
+/**
+ * The back of her head in the natural style: hair from the crown down to the nape, combed toward
+ * a low bun with a scrunchie (or a top bun, a ponytail, a bob or long hair).
+ */
+function naturalHairBack(c: CanvasRenderingContext2D, look: Look, cx: number, cy: number, w: number, h: number, fill: string, edge?: string) {
+  const pt = (t: number, gx: number, gy = gx): [number, number] => [
+    cx + Math.sin(t) * (1 - 0.12 * Math.cos(t)) * w * gx,
+    cy - Math.cos(t) * h * gy,
+  ];
+  const ends = look.hair === 'long' ? 0.86 : look.hair === 'bob' ? 0.55 : 0.34;
+  const tSide = look.hair === 'long' ? 2.6 : look.hair === 'bob' ? 2.2 : 1.95;
+  const lw = Math.max(1.2, w * 0.04);
+  const line = (color: string, width = lw) => {
+    c.strokeStyle = color;
+    c.lineWidth = width;
+    c.lineJoin = c.lineCap = 'round';
+    c.stroke();
+  };
+  c.fillStyle = fill;
+
+  if (look.hair === 'bun') {
+    c.beginPath();
+    c.arc(cx, cy - h * 1.02 - w * 0.12, w * 0.34, 0, Math.PI * 2);
+    c.fill();
+    if (edge) line(edge);
+  }
+
+  // the hair shape, with a soft lower edge that dips at the nape
+  c.beginPath();
+  c.moveTo(...pt(-tSide, 1.0));
+  for (let t = -tSide; t <= tSide; t += 0.06) c.lineTo(...pt(t, 1.05, 1.04 + 0.02 * Math.cos(t)));
+  const [rx, ry] = pt(tSide, 1.0);
+  c.lineTo(rx, ry);
+  c.quadraticCurveTo(cx + w * 0.62, cy + h * (ends + 0.06), cx, cy + h * ends);
+  c.quadraticCurveTo(cx - w * 0.62, cy + h * (ends + 0.06), ...pt(-tSide, 1.0));
+  c.closePath();
+  c.fill();
+  if (edge) line(edge);
+
+  // strands combed from the crown toward the nape
+  const knotY = cy + h * (look.hair === 'lowbun' ? 0.16 : ends - 0.08);
+  c.save();
+  c.globalAlpha = 0.9;
+  for (let k = -3; k <= 3; k++) {
+    if (!k) continue;
+    c.beginPath();
+    c.moveTo(cx + k * w * 0.05, cy - h * 0.95);
+    c.quadraticCurveTo(cx + k * w * 0.3, cy - h * 0.3, cx + k * w * 0.05, knotY);
+    line('rgba(255,255,255,0.16)', Math.max(1, w * 0.02));
+  }
+  c.restore();
+
+  if (look.hair === 'lowbun') {
+    // the low bun with a twist, and the scrunchie around it
+    const by = cy + h * 0.24;
+    c.fillStyle = fill;
+    c.beginPath();
+    c.ellipse(cx, by, w * 0.38, w * 0.34, 0, 0, Math.PI * 2);
+    c.fill();
+    if (edge) line(edge);
+    c.beginPath();
+    c.arc(cx + w * 0.02, by + w * 0.01, w * 0.2, Math.PI * 0.9, Math.PI * 2.3);
+    line('rgba(255,255,255,0.32)', Math.max(1, w * 0.04));
+    c.beginPath();
+    c.arc(cx + w * 0.03, by + w * 0.02, w * 0.09, Math.PI * 1.2, Math.PI * 2.6);
+    line('rgba(255,255,255,0.26)', Math.max(1, w * 0.03));
+    c.fillStyle = look.outfit;
+    c.beginPath();
+    c.ellipse(cx, by - w * 0.31, w * 0.26, w * 0.09, 0, 0, Math.PI * 2);
+    c.fill();
+    if (edge) line(edge, lw * 0.8);
+  } else if (look.hair === 'ponytail') {
+    c.fillStyle = fill;
+    c.beginPath();
+    c.ellipse(cx, cy + h * 0.55, w * 0.2, w * 0.5, 0, 0, Math.PI * 2);
+    c.fill();
+    if (edge) line(edge);
+    c.fillStyle = look.outfit;
+    c.beginPath();
+    c.ellipse(cx, cy + h * 0.3, w * 0.16, w * 0.06, 0, 0, Math.PI * 2);
+    c.fill();
+  }
 }
 
 function drawGlasses2D(ctx: CanvasRenderingContext2D, look: Look, cx: number, cy: number, s: number, ghost: boolean) {
