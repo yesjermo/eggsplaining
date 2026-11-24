@@ -30,6 +30,8 @@ function devServer(): Plugin {
 }
 
 export default defineConfig({
+  // GitHub Pages serves the site from /<repo>/; set BASE_PATH for that build
+  base: process.env.BASE_PATH || '/',
   plugins: [devServer()],
   build: { chunkSizeWarningLimit: 700 },
 });

@@ -8,9 +8,11 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "deploy": "node scripts/deploy-pages.mjs"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.15",
     "@types/three": "^0.180.0",
     "gifenc": "^1.0.3",
     "typescript": "^5.9.0",

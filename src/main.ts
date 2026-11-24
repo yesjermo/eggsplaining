@@ -9,6 +9,7 @@ import { avatarDataUrl } from './face2d';
 import { PRESET, randomLook, sanitizeLook, type Look } from './shared/look.js';
 import { flag, loadSettings, saveSettings, type Settings } from './settings';
 import type { Stage } from './render/scene';
+import { backend } from './leaderboard';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -86,8 +87,8 @@ showBests();
 
 function loadStage(): Promise<Stage> {
   if (stage) return Promise.resolve(stage);
-  stageLoading ??= import('./render/scene').then(({ Stage }) => {
-    stage = new Stage($<HTMLCanvasElement>('#stage'), settings.look);
+  stageLoading ??= import('./render/scene').then(async ({ Stage }) => {
+    stage = await Stage.create($<HTMLCanvasElement>('#stage'), settings.look);
     return stage;
   });
   return stageLoading;
@@ -135,31 +136,30 @@ function goHome() {
 }
 
 // ---------- leaderboard API ----------
-async function api<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, body === undefined ? undefined : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error || `Error ${res.status}`);
-  return data as T;
-}
-
 function requestRun(mode: Mode) {
   runId = null;
-  runOffline = false;
-  api<{ id: string }>('/api/run', { mode })
-    .then((r) => (runId = r.id))
+  runOffline = !backend;
+  backend
+    ?.startRun(mode)
+    .then((id) => (runId = id))
     .catch(() => (runOffline = true));
 }
 
 async function postScore() {
   if (!lastOver || posted) return;
+  if (!backend) {
+    resultRank.textContent = 'The world board isn’t switched on for this build yet. Your best is saved on this device.';
+    postForm.hidden = true;
+    return;
+  }
   if (!runId) {
-    resultRank.textContent = runOffline ? 'The world board is offline right now, so this one stays local.' : 'Connecting…';
+    resultRank.textContent = runOffline ? 'Couldn’t reach the world board, so this one stays on your device.' : 'Connecting…';
     return;
   }
   postBtn.disabled = true;
   resultRank.textContent = 'Posting…';
   try {
-    const r = await api<{ rank: { all: number | null; today: number | null }; total: { all: number; today: number } }>('/api/score', {
+    const r = await backend.submit({
       runId,
       mode: lastOver.mode,
       score: lastOver.score,
@@ -215,12 +215,12 @@ async function loadBoard() {
   setTabs('#board-period', boardPeriod);
   boardRows.replaceChildren(emptyRow('Loading…'));
   boardYou.textContent = '';
+  if (!backend) {
+    boardRows.replaceChildren(emptyRow('The world board isn’t switched on for this build yet.'));
+    return;
+  }
   try {
-    const r = await api<{
-      rows: { rank: number; name: string; country: string; score: number; look: Look }[];
-      total: number;
-      you: { rank: number; score: number } | null;
-    }>(`/api/leaderboard?mode=${boardMode}&period=${boardPeriod}&limit=50&player=${settings.playerId}`);
+    const r = await backend.board(boardMode, boardPeriod, settings.playerId);
     if (!r.rows.length) {
       boardRows.replaceChildren(emptyRow(boardPeriod === 'today' ? 'No scores yet today. Be the first egg on the board.' : 'No scores yet. Be the first egg on the board.'));
     } else {

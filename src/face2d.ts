@@ -54,6 +54,58 @@ export function shade(hex: string, amt: number): string {
  * Draws eyes, brows, nose, mouth, mole, blush and freckles centred at (cx, cy).
  * `s` is the face half-width in pixels; everything is laid out in face units (-1..1).
  */
+/**
+ * Only the painted skin details (blush, freckles, mole, and flat nose styles) for the 3D head,
+ * whose eyes, brows, nose and mouth are real geometry.
+ */
+export function drawSkinDetails(ctx: CanvasRenderingContext2D, look: Look, flush: number, cx: number, cy: number, s: number): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(s, s);
+  const a = (look.blush ? 0.24 : 0) + flush * 0.55;
+  if (a > 0) {
+    ctx.fillStyle = `rgba(255,105,140,${Math.min(0.8, a)})`;
+    for (const sx of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(sx * 0.6, 0.32, 0.2, 0.12, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (look.freckles) {
+    ctx.fillStyle = 'rgba(150,90,60,0.55)';
+    for (const sx of [-1, 1])
+      for (const [x, y] of [
+        [0.38, 0.16],
+        [0.48, 0.22],
+        [0.42, 0.3],
+        [0.55, 0.14],
+      ]) {
+        ctx.beginPath();
+        ctx.arc(sx * x, y, 0.025, 0, Math.PI * 2);
+        ctx.fill();
+      }
+  }
+  ctx.strokeStyle = ctx.fillStyle = shade(look.skin, -0.32);
+  ctx.lineWidth = 0.055;
+  ctx.lineCap = 'round';
+  if (look.nose === 'dot' || look.nose === 'line') drawNose(ctx, look.nose);
+  const mp: Record<string, [number, number]> = {
+    chinL: [-0.2, 0.72],
+    chinR: [0.2, 0.72],
+    cheekL: [-0.55, 0.42],
+    cheekR: [0.55, 0.42],
+    lipL: [-0.36, 0.56],
+  };
+  if (mp[look.mole]) {
+    const [x, y] = mp[look.mole];
+    ctx.fillStyle = '#3a2a2a';
+    ctx.beginPath();
+    ctx.arc(x, y, 0.032, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 export function drawFace(ctx: CanvasRenderingContext2D, look: Look, ex: FaceExpr, cx: number, cy: number, s: number, o: DrawOpts = {}): void {
   const ink = o.ink ?? (o.ghost ? 'rgba(90,86,100,0.75)' : INK);
   const W = o.wobble;

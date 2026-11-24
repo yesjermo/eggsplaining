@@ -67,8 +67,14 @@ export class Stage {
   private push = 0;
   private look: Look;
 
-  constructor(canvas: HTMLCanvasElement, look: Look) {
+  /** Loads her Blender head, then builds the stage. */
+  static async create(canvas: HTMLCanvasElement, look: Look): Promise<Stage> {
+    return new Stage(canvas, look, await Egg.create(look));
+  }
+
+  private constructor(canvas: HTMLCanvasElement, look: Look, egg: Egg) {
     this.look = look;
+    this.egg = egg;
     const lowEnd = (navigator.hardwareConcurrency ?? 8) <= 4;
     this.renderer = new WebGLRenderer({
       canvas,
@@ -91,7 +97,6 @@ export class Stage {
     this.lampMat = new MeshLambertMaterial({ color: '#ffb3c4', emissive: new Color('#ff6f91'), emissiveIntensity: 0.2 });
     this.buildChamber();
 
-    this.egg = new Egg(look);
     this.egg.root.position.y = FLOOR_Y;
     this.scene.add(this.egg.root);
 

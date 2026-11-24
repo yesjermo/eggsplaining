@@ -59,11 +59,32 @@ The default preset is in `src/shared/look.js`: low bun with wispy curtain bangs,
 
 Regenerate the splash GIF: run `npm run dev` and open `/?gif=1`. It's written to `marketing/splash.gif` and `public/splash.gif`.
 
-## Hosting (Render)
+## Her 3D head (Blender)
 
-`render.yaml` describes a free Node web service. Render's free disk is wiped when the service sleeps or redeploys, so scores are mirrored to a private GitHub repo:
+`tools/blender/build_head.py` sculpts her head in Blender and exports `public/models/egg-head.glb` (about 380 KB). It includes:
+- round cheeks and a soft jaw
+- eyes with upper lids
+- brows, a button nose, a closed mouth and an open mouth
+- her low bun with a tie, face-framing strands, and wispy curtain bangs
 
-- `DATA_REPO`: for example `yesjermo/eggsplaining-data`
-- `GITHUB_TOKEN`: a fine-grained token with **Contents: Read and write** on that repo only
+Shape keys drive the expressions (Close/Sleepy/Wide lids, Worry/Angry/Raise brows, Flat/Wavy/Frown/Big/Small lips, Grin/O mouth, cheek Puff). The game eases between them every frame, so she blinks, glances, strains and grins smoothly instead of snapping. Rebuild after editing the script:
 
-Without the token the board still works but resets when the server restarts. `GET /api/health` shows which storage is active and when the last backup happened.
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python tools/blender/build_head.py
+```
+
+## Hosting (GitHub Pages + Supabase)
+
+The code stays in this private repo. `npm run deploy` builds the game and publishes only the built files to the public repo `yesjermo/eggsplaining-site`, served at https://yesjermo.github.io/eggsplaining-site/.
+
+The world leaderboard lives in a free Supabase project:
+1. Create a project at supabase.com. Open **SQL Editor**, paste `supabase/schema.sql` and run it. The tables stay locked, and the browser can only call `start_run`, `submit_score` and `leaderboard`, which check each run's time, the score ceiling and rate limits.
+2. Copy the **Project URL** and the **anon public** key from Project Settings → API into `.env.production`:
+   ```
+   VITE_SUPABASE_URL=https://xxxx.supabase.co
+   VITE_SUPABASE_ANON_KEY=eyJ...
+   ```
+   The anon key is meant to be public. Never use the `service_role` key here.
+3. Run `npm run deploy` again.
+
+Without those values the site works with personal bests only. `npm test` runs the SQL against an in-memory Postgres (PGlite).
