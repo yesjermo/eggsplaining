@@ -1,124 +1,165 @@
-# Eggsplaining
+<div align="center">
 
-Hold to pump a very nervous egg. Let go to bank the points. Don’t pop her. Then see where you rank against everyone else in the world.
+# 🥚 Eggsplaining
 
-**Play:** https://yesjermo.github.io/eggsplaining-site/
+**Hold to pump a very nervous egg. Let go to bank. Don’t pop her.**
+*Then explain yourself to the entire planet on the world leaderboard.*
 
-![Splash](marketing/splash.gif)
+[![Play now](https://img.shields.io/badge/play-now%20(she's%20waiting)-ff6f91?style=for-the-badge)](https://yesjermo.github.io/eggsplaining/)
+[![Deploy](https://github.com/yesjermo/eggsplaining/actions/workflows/pages.yml/badge.svg)](https://github.com/yesjermo/eggsplaining/actions/workflows/pages.yml)
 
-```bash
-npm install
-npm run dev      # game + a local leaderboard API on http://localhost:5173
-npm test         # rules, input edge cases, local API, Supabase SQL (37 tests, vitest)
-npm run deploy   # build and publish to GitHub Pages
-```
+![Tests](https://img.shields.io/badge/tests-37%20passing-3fa37a)
+![Eggs harmed](https://img.shields.io/badge/eggs%20harmed-yes-e2405f)
+![Is she fine](https://img.shields.io/badge/is%20she%20fine-she%20says%20yes-b9a4ff)
+![Hold time](https://img.shields.io/badge/hold%20time-too%20long-ffb347)
+
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Three.js](https://img.shields.io/badge/Three.js-000000?logo=threedotjs&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
+![Blender](https://img.shields.io/badge/Blender-E87D0D?logo=blender&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
+![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-222222?logo=githubpages&logoColor=white)
+
+![Splash: her soul leaving her body, as one does](marketing/splash.gif)
+
+</div>
+
+## What is this
+
+A party game about one egg and your complete lack of restraint. You hold a button, pressure builds inside her little glass test chamber, and the points pour in. Let go and you bank them. Keep holding and, well. She has a line she says after that, and you can write it yourself.
+
+There's no pressure meter. The gauge in the chamber is wearing a tiny cover, because you are supposed to *read her face*, like a decent person.
 
 ## How to play
 
-Hold Space, or the big button on a phone, to pump pressure and earn points. The longer you hold, the faster points come. Let go to bank them. Pop her and the points from that hold are gone.
+1. **Hold** Space, or the big button on your phone. Points come faster the longer you hold.
+2. **Let go** to bank them. She cools down a little. Not enough.
+3. **Don’t pop her.** If you do, that hold’s points are gone and her soul floats out of the chamber, judging you.
 
-- **Classic:** one egg, one pop. Every bank cools her off a little, moves the hidden line, and makes her touchier, so pressure builds faster and holds pay more. Your score is everything you banked before the pop.
-- **ADHD mode (Blitz):** 45 seconds, faster pressure, and banks in a row build a combo (×1.5, ×2 … up to ×5). A pop wipes the hold and the combo and costs 3 seconds, but the run keeps going. It adds pop-up scores, haptics on Android, and Space to restart instantly.
+A hold shorter than a beat banks nothing, so mashing doesn't work. Switching tabs or having your phone cancel the touch counts as letting go, so you can't escape that way either.
 
-A hold shorter than a beat banks nothing. Letting go of the button, a touch the phone cancels, and switching tabs all count as releasing.
+### Modes
 
-Each mode has its own world leaderboard, for today (UTC) and all time, with one best score per player, country flags and mini Mii avatars.
+| Mode | Vibe |
+| --- | --- |
+| **Classic** | One egg, one pop. Every bank makes her touchier: pressure builds faster and holds pay more. How far can you push her? |
+| **ADHD mode** | 45 seconds. Faster everything. Banks in a row build a combo up to ×5. A pop costs 3 seconds and your combo, not your dignity. Space restarts instantly, because you were going to anyway. |
 
-## Reading her
+Each mode has its own **world leaderboard** for today and all time, with flags and a tiny Mii of every player. One best score per person, so no, playing 400 times doesn't put you on the board 400 times.
 
-There's no pressure meter. The gauge in the chamber wears a little cover. These cues are consistent and never faked:
-- Blink rate goes from about every 3 s to several times a second.
-- Her cheeks flush and puff out.
-- A creak sound starts past halfway and speeds up.
-- Cracks appear in the last quarter.
+## Reading her (a field guide)
 
-The fake tells are a serene grin near the edge and a panic face when she's actually safe. She also taps her foot when you hesitate, glances at the covered gauge on long holds, says "I’m fine." while shaking, and after a pop her soul floats out of the chamber with your custom line.
+She will lie to you. Sometimes. These cues are consistent and never faked:
 
-## The character
+- 👀 **Blinking:** calm is about every 3 seconds; near the end, several times a second.
+- 😳 **Cheeks:** they flush and puff out the harder you push.
+- 🪵 **Creaking:** starts past halfway and speeds up. That's not a floorboard.
+- 💔 **Cracks:** only appear in the last quarter. If you see one, you have made choices.
 
-She's a Mii-style egg:
-- **Head:** sculpted in 3D with Blender (round cheeks, soft jaw, button nose, low bun, curtain bangs).
-- **Face:** painted 2D Mii parts that ease smoothly between expressions. Blinks close gradually, a smile widens into a grin, her brows lift by degrees and her lips wobble when she's nervous.
+These ones are fake: a serene little grin right before she pops, and a panic face when she's actually totally fine. She also:
+- taps her foot when you hesitate
+- glances at the covered gauge on long holds
+- says *“I’m fine.”* while visibly shaking, which she is not
 
-The same face painter draws the Mii Maker thumbnails, leaderboard avatars and the splash, so she looks the same everywhere.
+## Make her yours
 
-**Mii Maker** (the "Make her yours" button) has these tabs:
-- **Face:** skin, height, roundness
-- **Hair:** 9 styles, 5 bangs, colour
-- **Eyes:** 5 styles, size, spacing
-- **Brows, Nose, Mouth:** with lip colour
-- **Extras:** mole, blush, freckles, glasses and frame colour, favourite colour (outfit and sneakers)
-- **Name:** her nickname, her after-pop line, your leaderboard name, your country
+Hit **Make her yours** for a Mii Maker:
 
-The default preset is in `src/shared/look.js`: low bun with wispy curtain bangs, sleepy monolid eyes, round cheeks, a chin mole and a purple top.
+| Tab | What you can change |
+| --- | --- |
+| Face | skin, height, roundness |
+| Hair | 9 styles, 5 bangs, colour |
+| Eyes | 5 styles, size, spacing |
+| Brows, Nose, Mouth | shapes, plus lip colour |
+| Extras | mole, blush, freckles, glasses and frame colour, favourite colour |
+| Name | her nickname, her after-pop line, your leaderboard name, your country |
 
-### Her 3D head (Blender)
+The default is a real friend, lovingly egg-ified (`src/shared/look.js`): a low bun with wispy curtain bangs, sleepy monolid eyes, round cheeks, a chin mole and a purple top. Say hi to Peggy.
 
-`tools/blender/build_head.py` builds the head in Blender and exports `public/models/egg-head.glb` (about 445 KB):
-- **Body:** the sculpted egg with UVs for the painted skin, plus a cheek **Puff** shape key for when she strains.
-- **Nose:** a soft button that sits under the painted nose.
-- **HairLowbun:**
-  - a centre-parted cap with combed grooves, a rounded crown and a tucked hairline
+## How she's made
+
+- **Head:** sculpted in **Blender** by a script, `tools/blender/build_head.py`, which exports `public/models/egg-head.glb` (about 445 KB). It has round cheeks with a **Puff** shape key for when she strains, and a button nose. Her hair includes:
+  - a centre-parted, combed cap with a rounded crown
   - a wrapped low bun with a scrunchie
-  - wavy face-framing tendrils and a few flyaways
-- **BangsWispy:** two layers of curtain bangs made of tapered clumps with a V-shaped cross-section, so they catch the light.
+  - layered curtain bangs, face-framing tendrils and a few flyaways
+  - darker roots baked into vertex colours, plus a soft sheen in game
+- **Face:** painted **Mii-style** (`src/miiface.ts`) onto a decal that hugs her sculpted face. Every feature runs on smooth values, so expressions ease instead of snapping: blinks close gradually, smiles widen into grins, brows worry by degrees. The same painter draws the Mii Maker thumbnails, the leaderboard avatars and the splash.
+- **Stage:** lightweight **Three.js** with no shadow maps, loaded behind the 2D splash so the first screen is about 16 KB gzipped.
+- **Leaderboard:** **Supabase**. The tables are locked, and the browser can only call three functions that check every score (see Hosting).
+- **Hosting:** **GitHub Pages**, built by an Action on every push.
 
-A vertex colour layer darkens roots and grooves. The game multiplies it by the chosen hair colour and adds a soft sheen. The other hairstyles are built in code.
-
-Rebuild after editing the script. This also renders previews to `tools/blender/preview/`:
+Rebuild her head after editing the script. This also renders previews to `tools/blender/preview/`:
 
 ```bash
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python tools/blender/build_head.py
 ```
 
-### Splash GIF
+To regenerate the splash GIF, run `npm run dev`, then open `/?gif=1`. It's written to `marketing/splash.gif` and `public/splash.gif`.
 
-The splash shows her collapsed face-down while her soul floats up out of her, hand-drawn style. To regenerate the GIF, run `npm run dev` and open `/?gif=1`. It's written to `marketing/splash.gif` and `public/splash.gif`, which is also the link-preview image.
+## Run it
+
+```bash
+npm install
+npm run dev     # game + a local leaderboard on http://localhost:5173
+npm test        # 37 tests (see below)
+npm run deploy  # = git push; the Action tests, builds and publishes
+```
 
 ## Hosting
 
-**Game:** GitHub Pages. The code stays in this private repo. `npm run deploy` (`scripts/deploy-pages.mjs`) builds the game with the right base path and publishes only the built files to the public repo `yesjermo/eggsplaining-site`. It refuses to build if `.env.production` still has placeholder values or a `service_role` key.
+**Game:** GitHub Pages at https://yesjermo.github.io/eggsplaining/. `.github/workflows/pages.yml` runs the tests, builds with the repo's base path and deploys on every push to `main`. If the tests fail, nothing ships, and she stays safe.
 
-**World leaderboard:** Supabase, the project at `dnfbwhxdthrgnwpvrbax.supabase.co`.
-- `supabase/schema.sql` creates two tables. Row level security keeps them locked, so nobody can read or write them directly.
-- The browser can only call three functions:
-  - `start_run(mode)` returns a single-use run id
-  - `submit_score(...)` checks the run's mode and age, the score ceiling (the same one as `src/shared/limits.js`) and per-IP limits, then cleans the name, country and avatar and ranks the score
-  - `leaderboard(mode, period, limit, player)` returns each player's best for today or all time, plus your rank
-- The settings live in `.env.production`, which git ignores:
-  ```
-  VITE_SUPABASE_URL=https://dnfbwhxdthrgnwpvrbax.supabase.co
-  VITE_SUPABASE_ANON_KEY=sb_publishable_...
-  ```
-  The publishable (anon) key is meant to ship inside the game. Never put the `service_role` or secret key here.
-- To set it up in a new Supabase project: run `supabase/schema.sql` in its SQL Editor, put the new URL and publishable key in `.env.production`, then `npm run deploy`. Without that file the site still works, with personal bests only.
-- To clear test scores, run this in the SQL Editor: `delete from scores where name = 'Setup test';`
+**World leaderboard:** Supabase. `supabase/schema.sql` creates two tables that row level security keeps locked. The browser can only call:
+- `start_run(mode)`: returns a single-use run id
+- `submit_score(...)`: checks the run's mode and age, a points-per-second ceiling (the same one as `src/shared/limits.js`) and per-IP limits. It also cleans the name, country and avatar.
+- `leaderboard(mode, period, limit, player)`: returns each player's best for today or all time, plus your rank
 
-**Local development:** `npm run dev` mounts a local version of the same leaderboard (`server/api.mjs`, stored in `.data/`), so you can play and post scores without touching the live board. `server.mjs` can serve the built game and that API together if you ever self-host (`npm run build && npm start`, port 8787).
+The Action reads two **repo variables**, `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Both are public: the project URL and the *publishable* key, which ship inside the game anyway. Never put the `service_role` or secret key anywhere near this repo.
 
-## Structure
+To use your own Supabase project:
+1. Run `supabase/schema.sql` in its SQL Editor.
+2. Set the two repo variables (Settings → Secrets and variables → Actions → Variables).
+3. Push.
 
-| Path | Role |
+For local builds, the same values can go in a git-ignored `.env.production`. With neither set, the game still works with personal bests only.
+
+**Old link:** https://yesjermo.github.io/eggsplaining-site/ redirects here, so links you already shared keep working.
+
+To clear test scores, run this in the Supabase SQL Editor:
+```sql
+delete from scores where name = 'Setup test';
+```
+
+**Local dev:** `npm run dev` mounts a local copy of the leaderboard (`server/api.mjs`, saved in `.data/`), so you can pop her all day without touching the real board. `server.mjs` serves the build plus that API if you ever self-host (`npm run build && npm start`, port 8787).
+
+## Code map
+
+| Path | What it does |
 | --- | --- |
-| `src/game/state.ts` | Pure rules for both modes, time passed in via `tick(dt)`, injectable RNG |
-| `src/game/holdInput.ts` | Keyboard / pointer / touch-cancel / tab-switch → press and release |
-| `src/shared/look.js`, `limits.js` | Look schema and validation, score ceilings (shared with the servers) |
-| `src/miiface.ts` | Refined Mii face driven by a continuous pose, so expressions can ease |
-| `src/face2d.ts` | 2D egg head, hair, bangs and ghost for thumbnails, avatars and the splash |
-| `src/render/egg.ts` | Loads the Blender head, paints the face decal, eases expressions, body motion |
-| `src/render/scene.ts` | Lightweight Three.js stage (no shadow maps), shards, confetti, soul, camera |
-| `src/splash.ts` | Soul-leaving-body splash animation and GIF export |
-| `src/ui/miimaker.ts` | Mii Maker sheet |
-| `src/leaderboard.ts` | Leaderboard client: Supabase on the live site, local API in dev |
-| `supabase/schema.sql` | Live leaderboard tables and functions (tested in PGlite) |
-| `server/` | Local and self-host leaderboard API with JSON storage |
-| `tools/blender/build_head.py` | Builds her 3D head and hair |
-| `scripts/deploy-pages.mjs` | GitHub Pages deploy |
+| `src/game/state.ts` | The rules, for both modes. Pure: time only moves when you call `tick(dt)` |
+| `src/game/holdInput.ts` | Turns keys, touches, cancelled touches and tab switches into press/release |
+| `src/shared/look.js`, `limits.js` | The Mii schema and validation, plus score ceilings shared with the servers |
+| `src/miiface.ts` | Her refined Mii face, driven by a continuous pose |
+| `src/face2d.ts` | 2D egg heads, hair and ghosts for thumbnails, avatars and the splash |
+| `src/render/egg.ts` | Loads the Blender head, paints the face, eases expressions, wobbles, sweats |
+| `src/render/scene.ts` | The chamber, confetti, shell shards, the soul, the camera |
+| `src/splash.ts` | Soul-leaving-body splash and GIF export |
+| `src/ui/miimaker.ts` | The Mii Maker |
+| `src/leaderboard.ts` | Leaderboard client: Supabase when live, local API in dev |
+| `supabase/schema.sql` | The real leaderboard tables and functions |
+| `server/` | Local and self-host leaderboard API |
+| `tools/blender/build_head.py` | Builds her head and hair |
+| `.github/workflows/pages.yml` | Test, build, deploy |
 
 ## Tests
 
 `npm test` runs 37 tests:
-- **Game rules:** hold and release, too-early releases, pops mid-hold, long frames, both modes, combos, the score ceiling, fake tells.
-- **Input edge cases:** key auto-repeat, touch cancellation, second fingers, tab switching, rapid tapping.
-- **Local leaderboard API.**
-- **Supabase SQL:** runs in an in-memory Postgres, including a check that the public key can't touch the tables directly.
+- **Rules:** holding, banking, too-early releases, pops mid-hold, long frames, both modes, combos, the score ceiling, fake tells.
+- **Input:** key auto-repeat, cancelled touches, second fingers, tab switching, button-mashing.
+- **Leaderboard:** the local API, plus the Supabase SQL in an in-memory Postgres. That includes proof that the public key can't touch the tables directly.
+
+<div align="center">
+
+*No eggs were permanently harmed. She resets every round. She remembers, though.*
+
+</div>
