@@ -725,6 +725,11 @@ export function drawHead2D(
       }
       c.fill();
     }
+    if (toon && !o.back && NATURAL_HAIR.has(look.hair)) {
+      naturalHair(c, look, cx, cy, w, h, capY, hairFill);
+      if (look.bangs === 'blunt' || look.bangs === 'side') drawBangs(c, look, faceS * 1.3, cx, capY, o);
+      return;
+    }
     if (look.hair !== 'buzz') {
       c.beginPath();
       // a fuller crown in the cartoon style: a little wider than her head, like real volume
@@ -854,6 +859,97 @@ export function drawHead2D(
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/** Styles drawn with the natural, head-hugging hair shape in the cartoon look. */
+const NATURAL_HAIR = new Set(['lowbun', 'bun', 'ponytail', 'bob', 'long']);
+
+/**
+ * Natural cartoon hair: one soft shape that hugs the top of her head, parts in the middle,
+ * sweeps down each side of her face as curtain bangs and ends in soft tapered tips by her
+ * cheeks, with a few lighter strand lines following the flow instead of a plastic shine.
+ */
+function naturalHair(c: CanvasRenderingContext2D, look: Look, cx: number, cy: number, w: number, h: number, capY: number, fill: string) {
+  const pt = (t: number, gx: number, gy = gx): [number, number] => [
+    cx + Math.sin(t) * (1 - 0.12 * Math.cos(t)) * w * gx,
+    cy - Math.cos(t) * h * gy,
+  ];
+  // how far down the sides the hair falls (radians from the crown)
+  const tEnd = look.hair === 'long' ? 2.4 : look.hair === 'bob' ? 2.0 : 1.62;
+  const curtain = look.bangs === 'wispy' || look.bangs === 'curtain';
+  const P: [number, number] = [cx, capY - h * (curtain ? 0.03 : 0.07)];
+  c.fillStyle = fill;
+
+  // a top bun or ponytail sits behind the main shape
+  if (look.hair === 'bun') {
+    c.beginPath();
+    c.arc(cx, cy - h * 1.02 - w * 0.12, w * 0.34, 0, Math.PI * 2);
+    c.fill();
+  }
+  if (look.hair === 'ponytail') {
+    for (const [dx, dy, r] of [
+      [0.95, -0.72, 0.24],
+      [1.16, -0.52, 0.21],
+      [1.26, -0.28, 0.17],
+    ] as const) {
+      c.beginPath();
+      c.arc(cx + w * dx, cy + h * dy, w * r, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
+  c.beginPath();
+  c.moveTo(...P);
+  for (const s of [1, -1]) {
+    // inner edge: the fringe line from the part, then down along her face
+    const R1 = pt(s * 1.12, 0.9);
+    const R2 = pt(s * (tEnd - 0.1), 0.9);
+    const ctrl: [number, number] = curtain ? [cx + s * w * 0.46, capY + h * 0.3] : [cx + s * w * 0.6, capY - h * 0.08];
+    if (s === 1) {
+      c.quadraticCurveTo(ctrl[0], ctrl[1], ...R1);
+      c.quadraticCurveTo(...pt(s * (1.12 + tEnd - 0.1) * 0.5, 0.86), ...R2);
+      // soft tapered tip, then up and over the crown
+      c.quadraticCurveTo(...pt(s * (tEnd + 0.03), 0.97), ...pt(s * tEnd, 1.06, 1.03));
+      for (let t = tEnd; t >= -tEnd; t -= 0.06) c.lineTo(...pt(t, 1.06, 1.04 + 0.025 * Math.cos(t)));
+    } else {
+      c.quadraticCurveTo(...pt(s * (tEnd + 0.03), 0.97), ...R2);
+      c.quadraticCurveTo(...pt(s * (1.12 + tEnd - 0.1) * 0.5, 0.86), ...R1);
+      c.quadraticCurveTo(ctrl[0], ctrl[1], ...P);
+    }
+  }
+  c.closePath();
+  c.fill();
+
+  // strands: a few lighter lines that follow the hair's flow from the part
+  c.save();
+  c.lineCap = 'round';
+  c.strokeStyle = 'rgba(255,255,255,0.14)';
+  c.lineWidth = Math.max(1, w * 0.02);
+  for (const s of [-1, 1])
+    for (let k = 0; k < 3; k++) {
+      c.beginPath();
+      const t0 = s * (0.14 + k * 0.12);
+      const t1 = s * Math.min(tEnd - 0.2, 1.05 + k * 0.2);
+      const g = 0.99 - k * 0.025;
+      for (let i = 0; i <= 14; i++) {
+        const t = t0 + ((t1 - t0) * i) / 14;
+        const [x, y] = pt(t, g - 0.03 * (i / 14), g + 0.01 - 0.03 * (i / 14));
+        if (i) c.lineTo(x, y);
+        else c.moveTo(x, y);
+      }
+      c.stroke();
+    }
+  // a soft, small sheen on the crown, where light would catch
+  c.strokeStyle = 'rgba(255,255,255,0.2)';
+  c.lineWidth = h * 0.035;
+  c.beginPath();
+  for (let i = 0; i <= 10; i++) {
+    const [x, y] = pt(-0.78 + i * 0.04, 0.92, 0.95);
+    if (i) c.lineTo(x, y);
+    else c.moveTo(x, y);
+  }
+  c.stroke();
+  c.restore();
 }
 
 function drawGlasses2D(ctx: CanvasRenderingContext2D, look: Look, cx: number, cy: number, s: number, ghost: boolean) {
