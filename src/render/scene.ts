@@ -10,7 +10,7 @@ const CONFETTI_COLORS = ['#ff9eb5', '#b9a4ff', '#7fd6c2', '#ffc46b', '#8cc8ff', 
 const TUBE_R = 1.75;
 const TUBE_H = 3.55;
 /** soft outline for the chamber, so she stays the boldest thing on screen */
-const LINE = '#8a78b8';
+const LINE = 'rgba(126,106,180,0.72)';
 const INK = '#2b2232';
 
 interface Bit {
@@ -149,7 +149,7 @@ export class Stage {
     line(b, u * 0.12, LINE);
     line(b, u * 0.07, '#e6e0f2');
     ell(b, gx, 0.04, 0.38, 0.11);
-    b.fillStyle = '#f6f2ff';
+    b.fillStyle = 'rgba(255,255,255,0.6)';
     b.fill();
     line(b);
     b.beginPath();
@@ -184,11 +184,11 @@ export class Stage {
     b.ellipse(X(0), Y(-0.42), 2.3 * u, 2.3 * RY * u, 0, Math.PI, 0, true);
     b.lineTo(X(2.15), Y(0));
     b.closePath();
-    b.fillStyle = '#efe9fb';
+    b.fillStyle = 'rgba(255,255,255,0.42)';
     b.fill();
     line(b);
     ell(b, 0, 0, 2.15, 2.15 * RY);
-    b.fillStyle = '#f8f5ff';
+    b.fillStyle = 'rgba(255,255,255,0.68)';
     b.fill();
     line(b);
     ell(b, 0, 0, 2.0, 2.0 * RY);
@@ -233,19 +233,19 @@ export class Stage {
     f.lineTo(X(2.05), Y(TUBE_H));
     f.ellipse(X(0), Y(TUBE_H), 2.05 * u, 2.05 * RY * u, 0, 0, Math.PI);
     f.closePath();
-    f.fillStyle = '#efe9fb';
+    f.fillStyle = 'rgba(255,255,255,0.42)';
     f.fill();
     line(f);
     ell(f, 0, TUBE_H, 2.05, 2.05 * RY, 0, Math.PI);
     line(f, u * 0.07, '#c8b8ff');
     ell(f, 0, TUBE_H + 0.32, 2.0, 2.0 * RY);
-    f.fillStyle = '#f8f5ff';
+    f.fillStyle = 'rgba(255,255,255,0.68)';
     f.fill();
     line(f);
     f.beginPath();
     f.ellipse(X(0), Y(TUBE_H + 0.36), 0.7 * u, 0.4 * u, 0, Math.PI, Math.PI * 2);
     f.closePath();
-    f.fillStyle = '#e6e0f2';
+    f.fillStyle = 'rgba(255,255,255,0.5)';
     f.fill();
     line(f);
   }

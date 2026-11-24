@@ -600,13 +600,28 @@ export function drawHead2D(
       c.beginPath();
       if (look.hair === 'long') c.ellipse(cx, cy - h * 0.05, w * 1.12, h * 0.98, 0, 0, Math.PI * 2);
       else if (look.hair === 'bob') c.ellipse(cx, cy - h * 0.32, w * 1.12, h * 0.72, 0, 0, Math.PI * 2);
+      else if (toon) c.ellipse(cx + w * 1.0, cy + h * 0.02, w * 0.3, w * 0.28, 0.3, 0, Math.PI * 2);
       else c.arc(cx + w * 0.8, cy - h * 0.08, w * 0.26, 0, Math.PI * 2);
       c.fill();
       if (toon && look.hair === 'lowbun') {
-        // scrunchie where the bun meets her head
+        // the bun's twist, a soft shine on it, and a scrunchie where it meets her head
+        const bx = cx + w * 1.0;
+        const by = cy + h * 0.02;
+        c.strokeStyle = 'rgba(255,255,255,0.18)';
+        c.lineWidth = w * 0.045;
+        c.beginPath();
+        c.arc(bx, by, w * 0.17, Math.PI * 1.1, Math.PI * 1.9);
+        c.stroke();
+        c.beginPath();
+        c.arc(bx + w * 0.03, by + w * 0.02, w * 0.08, Math.PI * 0.2, Math.PI * 1.3);
+        c.stroke();
         c.fillStyle = look.outfit;
         c.beginPath();
-        c.ellipse(cx + w * 0.66, cy - h * 0.08, w * 0.07, w * 0.17, 0.2, 0, Math.PI * 2);
+        c.ellipse(cx + w * 0.78, cy + h * 0.0, w * 0.08, w * 0.19, 0.25, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.35)';
+        c.beginPath();
+        c.ellipse(cx + w * 0.76, cy - h * 0.05, w * 0.025, w * 0.07, 0.25, 0, Math.PI * 2);
         c.fill();
       }
     });
@@ -712,7 +727,9 @@ export function drawHead2D(
     }
     if (look.hair !== 'buzz') {
       c.beginPath();
-      c.ellipse(cx, capY, w * 0.97, h * 0.47, 0, Math.PI, Math.PI * 2);
+      // a fuller crown in the cartoon style: a little wider than her head, like real volume
+      if (toon) c.ellipse(cx, capY + h * 0.01, w * 1.04, h * 0.5, 0, Math.PI, Math.PI * 2);
+      else c.ellipse(cx, capY, w * 0.97, h * 0.47, 0, Math.PI, Math.PI * 2);
       c.closePath();
       c.fill();
     } else {
@@ -795,7 +812,37 @@ export function drawHead2D(
         c.arc(cx, look.hair === 'bun' ? top - w * 0.1 : cy - h * 0.05, w * 0.32, 0, Math.PI * 2);
         c.fill();
       }
-    } else drawBangs(c, look, faceS * 1.3, cx, capY, o);
+    } else {
+      if (toon && (look.hair === 'lowbun' || look.hair === 'long' || look.hair === 'bob' || look.hair === 'ponytail')) {
+        // face-framing side locks that tuck in toward her cheeks
+        c.fillStyle = hairFill;
+        const deep = look.hair === 'long' ? 0.32 : look.hair === 'bob' ? 0.14 : 0.04;
+        for (const sx of [-1, 1]) {
+          c.beginPath();
+          c.moveTo(cx + sx * w * 1.03, capY - h * 0.03);
+          c.quadraticCurveTo(cx + sx * w * 1.08, cy - h * 0.2, cx + sx * w * 0.93, cy + h * deep);
+          c.quadraticCurveTo(cx + sx * w * 0.84, cy - h * 0.28, cx + sx * w * 0.66, capY + h * 0.06);
+          c.closePath();
+          c.fill();
+        }
+      }
+      drawBangs(c, look, faceS * 1.3, cx, capY, o);
+      if (toon && look.hair !== 'buzz') {
+        // the classic glossy cartoon hair shine: a soft band across the crown
+        c.save();
+        c.strokeStyle = 'rgba(255,255,255,0.26)';
+        c.lineCap = 'round';
+        c.lineWidth = h * 0.05;
+        c.beginPath();
+        c.ellipse(cx, capY + h * 0.03, w * 0.8, h * 0.36, 0, Math.PI * 1.13, Math.PI * 1.4);
+        c.stroke();
+        c.lineWidth = h * 0.035;
+        c.beginPath();
+        c.ellipse(cx, capY + h * 0.03, w * 0.8, h * 0.36, 0, Math.PI * 1.47, Math.PI * 1.56);
+        c.stroke();
+        c.restore();
+      }
+    }
   });
 
   if (!o.back && look.glasses !== 'none') drawGlasses2D(ctx, look, cx, faceY - faceS * 0.05, faceS, ghost);
