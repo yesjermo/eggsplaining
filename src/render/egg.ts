@@ -1,5 +1,6 @@
 import {
   CanvasTexture,
+  Color,
   CapsuleGeometry,
   ConeGeometry,
   CylinderGeometry,
@@ -10,6 +11,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  MeshPhongMaterial,
   Object3D,
   SphereGeometry,
   SRGBColorSpace,
@@ -144,7 +146,9 @@ export class Egg {
   private skinMat: MeshLambertMaterial;
   private limbMat = lambert('#ffe0c8');
   private shoeMat = lambert('#7e4a8c');
-  private hairMat = lambert('#1c1719', { side: DoubleSide });
+  private hairMat = new MeshPhongMaterial({ color: '#1c1719', side: DoubleSide, shininess: 28, specular: '#3a3240' });
+  /** sculpted Blender hair: vertex colours darken roots and grooves */
+  private hairMatV = new MeshPhongMaterial({ color: '#1c1719', side: DoubleSide, shininess: 34, specular: '#4a4250', vertexColors: true });
   private glassMat = lambert('#2b2440');
   private browMat = lambert('#1c1719');
   private lipMat = lambert('#c9786f');
@@ -243,7 +247,7 @@ export class Egg {
       case 'teeth':
         return lambert('#fbf7f2');
       case 'hair':
-        return this.hairMat;
+        return this.hairMatV;
       case 'tie':
         return this.tieMat;
       case 'brow':
@@ -331,6 +335,10 @@ export class Egg {
     this.shoeMat.color.set(look.outfit);
     this.tieMat.color.set(look.outfit);
     this.hairMat.color.set(look.hairColor);
+    this.hairMatV.color.set(look.hairColor);
+    // light hair needs less sheen to avoid looking plastic
+    const light = new Color(look.hairColor).getHSL({ h: 0, s: 0, l: 0 }).l > 0.5;
+    this.hairMatV.specular.set(light ? '#2a2630' : '#4a4250');
     this.browMat.color.set(look.hairColor === '#e9e3d9' ? '#8a7f70' : look.hairColor);
     this.glassMat.color.set(look.glassesColor);
     this.layoutFace(look);

@@ -349,77 +349,144 @@ def build_nose():
 
 
 # ---------------------------------------------------------------- hair
-
-def head_normal(p):
-    n = Vector((p.x, p.y, 0.0))
-    if n.length < 1e-6:
-        return Vector((0, 0, 1))
-    n.normalize()
-    up = (p.z - H * 0.6) / H
-    return (n + Vector((0, 0, up))).normalized()
+#
+# Refined hair: a parted, combed cap that closes smoothly over the crown, a wrapped low bun,
+# layered wispy curtain bangs made of V-section clumps, wavy face-framing tendrils and a few
+# flyaways. A vertex colour layer darkens roots and grooves; the game multiplies it by the
+# chosen hair colour and adds a soft sheen.
 
 
-def ribbon(bm, path, widths, mat_index=0):
-    """Flat tapered clump along `path`, double-sided by the renderer."""
-    left, right = [], []
+def smoothstep(a, b, x):
+    t = max(0.0, min(1.0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+
+
+def surf_n(theta, h, off):
+    """Point `off` above the egg along its true surface normal, and that normal."""
+    h = min(max(h, 0.001), H - 0.0005)
+    eps = 1e-3
+    r = radius_at(h)
+    dr = (radius_at(min(H, h + eps)) - radius_at(max(0.0, h - eps))) / (2 * eps)
+    nr, nz = 1.0, -dr
+    ln = math.hypot(nr, nz)
+    nr, nz = nr / ln, nz / ln
+    radial = Vector((math.sin(theta), -math.cos(theta), 0.0))
+    n = (radial * nr + Vector((0, 0, nz))).normalized()
+    return radial * r + Vector((0, 0, h)) + n * off, n
+
+
+class Painter:
+    """Collects per-vertex shades and writes them into a colour layer after faces exist."""
+
+    def __init__(self, bm):
+        self.bm = bm
+        self.shade = {}
+
+    def vert(self, co, shade=1.0):
+        v = self.bm.verts.new(co)
+        self.shade[v] = shade
+        return v
+
+    def finish(self):
+        layer = self.bm.loops.layers.color.new("Color")
+        for f in self.bm.faces:
+            for loop in f.loops:
+                c = self.shade.get(loop.vert, 1.0)
+                loop[layer] = (c, c, c, 1.0)
+
+
+def clump(pt, path, normals, widths, root_shade=0.72, tip_shade=1.0, mat_index=0):
+    """A hair clump with a shallow V cross-section (left, ridge, right) so it catches light."""
+    bm = pt.bm
+    rows = []
+    n_pts = len(path)
     for i, p in enumerate(path):
-        nxt = path[min(i + 1, len(path) - 1)]
+        nxt = path[min(i + 1, n_pts - 1)]
         prv = path[max(i - 1, 0)]
         tangent = (nxt - prv).normalized()
-        side = tangent.cross(head_normal(p)).normalized()
-        left.append(bm.verts.new(p + side * widths[i]))
-        right.append(bm.verts.new(p - side * widths[i]))
-    for i in range(len(path) - 1):
-        f = bm.faces.new((left[i], right[i], right[i + 1], left[i + 1]))
-        f.material_index = mat_index
+        n = normals[i]
+        side = tangent.cross(n).normalized()
+        w = widths[i]
+        u = i / (n_pts - 1)
+        c = root_shade + (tip_shade - root_shade) * u
+        rows.append((
+            pt.vert(p + side * w, c * 0.92),
+            pt.vert(p + n * (w * 0.35), c),
+            pt.vert(p - side * w, c * 0.92),
+        ))
+    for i in range(n_pts - 1):
+        for k in range(2):
+            f = bm.faces.new((rows[i][k], rows[i][k + 1], rows[i + 1][k + 1], rows[i + 1][k]))
+            f.material_index = mat_index
 
 
-def build_hair():
-    bm = bmesh.new()
-    NU, NV = 56, 14
+def hairline_h(theta):
+    a = abs(theta)
+    return HAIRLINE - 0.09 * g(a - 1.35, 0.35) - 0.8 * smoothstep(1.45, 2.7, a)
+
+
+def build_cap(pt):
+    NU, NV = 80, 22
     rows = []
     for i in range(NV + 1):
-        h = HAIRLINE - 0.04 + (H - 0.03 - HAIRLINE + 0.04) * (i / NV) ** 0.9
+        t = i / NV * 0.985
         row = []
         for j in range(NU):
             th = -math.pi + 2 * math.pi * j / NU
-            dip = 0.08 * g(abs(th) - 1.3, 0.35) + 0.22 * g(abs(th) - math.pi, 0.7)
-            hh = h - dip * (1 - i / NV)
-            vol = 0.05 + 0.025 * math.sin(i / NV * math.pi)
-            row.append(bm.verts.new(surf(th, min(hh, H - 0.002), vol)))
+            h0 = hairline_h(th)
+            h = h0 + (H - h0) * t ** 0.85
+            front = 1 - smoothstep(1.2, 1.9, abs(th))
+            vol = 0.012 + 0.05 * math.sin(min(1.0, t * 1.6) * math.pi / 2) + 0.012 * front * (1 - t)
+            # centre part at the front
+            vol -= 0.014 * g(th, 0.045) * front * (1 - smoothstep(0.55, 0.8, t))
+            # combed strand grooves, fading toward the crown so they never pinch
+            groove = math.sin(th * 38 + 2.2 * math.sin(t * 5 + th * 2))
+            vol += 0.0045 * groove * (1 - t) ** 0.6 * min(1.0, t * 6)
+            shade = 0.86 + 0.1 * groove * (1 - t) - 0.08 * (1 - min(1.0, t * 5))
+            p, _ = surf_n(th, h, vol)
+            row.append(pt.vert(p, shade))
         rows.append(row)
+    bm = pt.bm
     for i in range(NV):
         for j in range(NU):
             bm.faces.new((rows[i][j], rows[i][(j + 1) % NU], rows[i + 1][(j + 1) % NU], rows[i + 1][j]))
-    top = bm.verts.new((0, 0, H + 0.03))
+    top, _ = surf_n(0, H, 0.062)
+    tv = pt.vert(top, 0.95)
     for j in range(NU):
-        bm.faces.new((rows[NV][j], rows[NV][(j + 1) % NU], top))
+        bm.faces.new((rows[NV][j], rows[NV][(j + 1) % NU], tv))
+    # a tucked hem under the hairline so no skin gap shows between hair and head
+    hem = []
+    for j in range(NU):
+        th = -math.pi + 2 * math.pi * j / NU
+        p, _ = surf_n(th, hairline_h(th) - 0.02, -0.004)
+        hem.append(pt.vert(p, 0.7))
+    for j in range(NU):
+        bm.faces.new((hem[j], hem[(j + 1) % NU], rows[0][(j + 1) % NU], rows[0][j]))
 
-    # low bun at the back, with swirl grooves
-    res = bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=16, radius=0.3)
-    c = Vector((0, 0.86, H * 0.5))
+
+def build_bun(pt):
+    bm = pt.bm
+    res = bmesh.ops.create_uvsphere(bm, u_segments=36, v_segments=24, radius=1.0)
+    c = Vector((0, 0.84, H * 0.5))
     for v in res["verts"]:
-        a = math.atan2(v.co.z, v.co.x)
-        groove = 1 + 0.06 * math.sin(a * 5 + v.co.y * 18)
-        v.co = Vector((v.co.x * groove, v.co.y * 0.85 * groove, v.co.z * 0.92 * groove)) + c
-
-    # face-framing strands
-    for s in (-1, 1):
-        for t0, drop, w0 in ((1.0, 0.55, 0.035), (1.18, 0.42, 0.028)):
-            qs = [x / 9 for x in range(10)]
-            path = [surf(s * (t0 + 0.05 * q), HAIRLINE - 0.02 - drop * q, 0.05 + 0.01 * math.sin(q * 3)) for q in qs]
-            ribbon(bm, path, [w0 * (1 - 0.85 * q) for q in qs])
-
-    # hair tie around the bun (a torus in the XZ plane)
-    tie_c = Vector((0, 0.64, H * 0.5))
-    seg, ring = 24, 8
+        d = v.co.normalized()
+        a = math.atan2(d.z, d.x)
+        phi = math.acos(max(-1.0, min(1.0, d.y)))
+        wrap = math.sin(3 * a + phi * 9)
+        r = 0.29 * (1 + 0.045 * wrap)
+        v.co = Vector((d.x * r, d.y * r * 0.82, d.z * r * 0.94)) + c
+        pt.shade[v] = 0.84 + 0.14 * wrap
+    # scrunchie
+    tie_c = Vector((0, 0.7, H * 0.5))
+    seg, ring = 28, 10
     tv = []
     for i in range(seg):
         a = 2 * math.pi * i / seg
         for j in range(ring):
             b = 2 * math.pi * j / ring
-            rr = 0.18 + 0.035 * math.cos(b)
-            tv.append(bm.verts.new(tie_c + Vector((math.cos(a) * rr, math.sin(b) * 0.035, math.sin(a) * rr))))
+            puffy = 1 + 0.18 * math.sin(a * 7)
+            rr = 0.19 + 0.045 * puffy * math.cos(b)
+            tv.append(pt.vert(tie_c + Vector((math.cos(a) * rr, math.sin(b) * 0.05 * puffy, math.sin(a) * rr)), 1.0))
     for i in range(seg):
         for j in range(ring):
             a0 = i * ring + j
@@ -428,24 +495,75 @@ def build_hair():
             b1 = ((i + 1) % seg) * ring + (j + 1) % ring
             f = bm.faces.new((tv[a0], tv[b0], tv[b1], tv[a1]))
             f.material_index = 1
+
+
+def build_tendrils(pt):
+    for s in (-1, 1):
+        for k, (t0, length, w0) in enumerate(((0.98, 0.62, 0.026), (1.12, 0.5, 0.02))):
+            steps = 16
+            path, normals = [], []
+            for q in range(steps + 1):
+                u = q / steps
+                th = s * (t0 + 0.03 * u + 0.035 * math.sin(u * 7 + k))
+                h = HAIRLINE - 0.01 - length * u
+                p, n = surf_n(th, h, 0.028 + 0.03 * u)
+                path.append(p)
+                normals.append(n)
+            clump(pt, path, normals, [w0 * (1 - 0.88 * (q / steps) ** 1.1) for q in range(steps + 1)], 0.7, 1.0)
+
+
+def build_flyaways(pt):
+    for k, (th0, h0) in enumerate(((-0.35, 0.93), (0.25, 0.95), (0.6, 0.9), (-0.7, 0.88), (0.05, 0.98))):
+        steps = 10
+        path, normals = [], []
+        for q in range(steps + 1):
+            u = q / steps
+            th = th0 + 0.25 * u * (1 if k % 2 else -1)
+            h = H * h0 + 0.12 * u
+            p, n = surf_n(th, min(h, H - 0.01), 0.065 + 0.05 * math.sin(u * math.pi))
+            path.append(p)
+            normals.append(n)
+        clump(pt, path, normals, [0.006 * (1 - 0.7 * q / steps) for q in range(steps + 1)], 0.9, 1.0)
+
+
+def build_hair():
+    bm = bmesh.new()
+    pt = Painter(bm)
+    build_cap(pt)
+    build_bun(pt)
+    build_tendrils(pt)
+    build_flyaways(pt)
+    pt.finish()
     return new_object("HairLowbun", bm, ["hair", "tie"])
 
 
 def build_bangs():
+    """Layered wispy curtain bangs, parted in the middle, short at the centre, long at the sides."""
     bm = bmesh.new()
-    xs = [-0.95, -0.76, -0.58, -0.4, -0.24, -0.09, 0.09, 0.24, 0.4, 0.58, 0.76, 0.95]
-    for idx, t0 in enumerate(xs):
-        side = -1 if t0 < 0 else 1
-        length = 0.12 + abs(t0) * 0.16 + (idx % 3) * 0.03
-        sweep = side * (0.06 + abs(t0) * 0.14)
-        steps = 10
-        path = []
-        for q in range(steps + 1):
-            u = q / steps
-            th = t0 + sweep * u * u
-            h = HAIRLINE + 0.03 - length * u
-            path.append(surf(th, h, 0.045 + 0.012 * (1 - u)))
-        ribbon(bm, path, [0.042 * (1 - 0.9 * (q / steps) ** 1.2) for q in range(steps + 1)])
+    pt = Painter(bm)
+
+    def layer(roots, width, extra_len, lift, seed):
+        for idx, t0 in enumerate(roots):
+            side = -1 if t0 < 0 else 1
+            a = abs(t0) / 0.9
+            length = 0.13 + 0.26 * a ** 1.3 + extra_len + 0.025 * math.sin(idx * 2.7 + seed)
+            sweep = side * (0.05 + 0.3 * a)
+            steps = 14
+            path, normals = [], []
+            for q in range(steps + 1):
+                u = q / steps
+                th = t0 + sweep * u ** 1.6 + 0.018 * math.sin(u * 5 + idx + seed)
+                h = HAIRLINE + 0.045 - length * u
+                p, n = surf_n(th, h, lift + 0.026 * (1 - u) ** 1.5 + 0.008)
+                path.append(p)
+                normals.append(n)
+            clump(pt, path, normals, [width * (1 - 0.92 * (q / steps) ** 1.3) for q in range(steps + 1)], 0.68, 1.0)
+
+    under = [x * 0.9 / 7 * (1 if x > 0 else 1) for x in range(-7, 8) if x != 0]
+    layer(under, 0.05, 0.0, 0.004, 0.0)
+    over = [-0.78, -0.55, -0.32, -0.12, 0.12, 0.32, 0.55, 0.78]
+    layer(over, 0.032, 0.05, 0.016, 1.7)
+    pt.finish()
     return new_object("BangsWispy", bm, ["hair"])
 
 
@@ -542,6 +660,7 @@ bpy.ops.export_scene.gltf(
     export_texcoords=True,
     export_normals=True,
     export_materials="EXPORT",
+    **({"export_vertex_color": "ACTIVE"} if "export_vertex_color" in bpy.ops.export_scene.gltf.get_rna_type().properties.keys() else {"export_colors": True}),
 )
 print("EXPORTED", OUT, os.path.getsize(OUT))
 for ob in parts:
