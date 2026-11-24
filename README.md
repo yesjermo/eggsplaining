@@ -16,12 +16,14 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Canvas 2D](https://img.shields.io/badge/Canvas%202D-cartoon-b9a4ff)
 ![Three.js](https://img.shields.io/badge/Three.js-3D%20styles-000000?logo=threedotjs&logoColor=white)
-![Size](https://img.shields.io/badge/whole%20game-~22%20KB%20gzipped-7fd6c2)
+![Size](https://img.shields.io/badge/cartoon%20build-~24%20KB%20gzipped-7fd6c2)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
 ![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-222222?logo=githubpages&logoColor=white)
 
 ![Splash: her soul leaving her body, as one does](marketing/splash.gif)
+
+<img src="marketing/egg-render.png" alt="Peggy, a cartoon egg with a centre-parted bob of black hair and a low bun, in her glass test chamber" width="320">
 
 </div>
 
@@ -75,24 +77,29 @@ Hit **Make her yours** for a Mii Maker:
 | Extras | mole, blush, freckles, glasses and frame colour, favourite colour |
 | Name | her nickname, her after-pop line, your leaderboard name, your country |
 
-**Three styles** (pick one at the top of the Mii Maker):
+The default is a real friend, lovingly egg-ified (`src/shared/look.js`): sleek black hair parted in the middle with soft curtain bangs and a low bun, sleepy monolid eyes, round cheeks, a chin mole and a purple top. Say hi to Peggy.
+
+## Three ways to see her
+
+Pick a style under her preview in the Mii Maker. It switches straight away and is remembered.
 
 | Style | What it is |
 | --- | --- |
-| **Cartoon** | The default: a flat, outlined 2D cut-out that moves like jelly. No 3D library, so the game is about 22 KB gzipped. |
-| **3D** | The very first design brought back: a smooth 3D egg in a glossy pastel chamber, with the original Mii face (`src/render3d/`). |
-| **3D Mii** | Mii proportions: a big round head on a small body with stubby arms, matte shading and her cute flat Mii face. |
+| **Cartoon** | The default. A flat, outlined 2D cut-out that moves like jelly. No 3D library at all. |
+| **3D** | The very first design, brought back: a smooth 3D egg in a glossy pastel chamber, with the original Mii face painted on and little overalls. |
+| **3D Mii** | Mii proportions: a big round head on a small body, a white collar, stubby arms and tiny legs, with her cute flat Mii face. |
 
-Three.js only downloads (about 134 KB gzipped) when someone picks a 3D style.
-
-The default is a real friend, lovingly egg-ified (`src/shared/look.js`): a low bun with wispy curtain bangs, sleepy monolid eyes, round cheeks, a chin mole and a purple top. Say hi to Peggy.
+Three.js (about 134 KB gzipped) only downloads when someone picks a 3D style, so Cartoon players get the whole game in about 24 KB.
 
 ## How she's made
 
-- **Her:** a flat **cartoon cut-out** with the original Mii face, made cuter (`src/face2d.ts`): bigger eyes with two sparkles, round blush, and curtain bangs parted in the middle. Every part is a flat colour cel with a bold ink outline. Stubby arms, little legs and round sneakers are drawn on the same canvas (`src/render/egg.ts`), which is only repainted when her pose changes.
+- **Her (Cartoon):** a flat **cut-out** with the original Mii face, made cuter (`src/face2d.ts`): bigger eyes with two sparkles and round blush. Every part is a flat colour cel with a bold ink outline. Stubby arms, little legs and round sneakers are drawn on the same canvas (`src/render/egg.ts`), which is only repainted when her pose changes.
+- **Hair:** a natural shape that hugs her head, parts in the middle and sweeps down into soft curtain bangs with tapered ends. Faint strand lines follow the way it falls, and her low bun peeks out behind.
+- **Her (3D styles):** `src/render3d/` is the first version's Three.js egg, rebuilt around a shape profile. **3D** keeps the tall egg and the original face. **3D Mii** swaps in a round head, a small body and the cute face. Both paint the face onto the head as a texture and share the same expressions and tells.
 - **How she moves:** like jelly. A springy squash-and-stretch wobbles her whenever anything changes, she does little idle hops while she waits, a happy hop and wave on every bank, and squishes down as you hold. Her cheeks puff, cracks spread and, after a pop, her hair stands on end and she keels over with a bounce.
-- **Everywhere else:** the same drawing makes the Mii Maker previews and the leaderboard avatars, so she looks the same on every screen.
-- **Stage:** a flat cartoon test chamber in plain **Canvas 2D**: no WebGL and no 3D library. The static parts are painted once per resize, so each frame costs well under a millisecond. The whole game is about 22 KB of gzipped JavaScript.
+- **Everywhere else:** the cartoon drawing also makes the Mii Maker previews and the leaderboard avatars.
+- **Stage (Cartoon):** a translucent cartoon test chamber in plain **Canvas 2D**, with no WebGL. The static parts are painted once per resize, so each frame costs well under a millisecond.
+- **UI:** minimal frosted glass. Panels let the soft pastel background show through, with a light sheen and a hairline rim, and colour is saved for the moment you hold.
 - **Leaderboard:** **Supabase**. The tables are locked, and the browser can only call three functions that check every score (see Hosting).
 - **Hosting:** **GitHub Pages**, built by an Action on every push.
 
@@ -140,9 +147,10 @@ delete from scores where name = 'Setup test';
 | `src/game/holdInput.ts` | Turns keys, touches, cancelled touches and tab switches into press/release |
 | `src/shared/look.js`, `limits.js` | The Mii schema and validation, plus score ceilings shared with the servers |
 | `src/face2d.ts` | Her Mii face, hair and outlined cartoon cels, plus the sketchy ghost for the splash |
-| `src/render/egg.ts` | The cartoon cut-out in the chamber: expressions, limbs, squash, wobble, sweat, the fall |
-| `src/render/scene.ts` | The chamber, confetti, shell shards, the soul, the camera |
+| `src/render/egg.ts` | The cartoon cut-out: expressions, limbs, squash, wobble, sweat, the fall |
+| `src/render/scene.ts` | The 2D chamber, confetti, shell shards, the soul, the camera |
 | `src/render3d/` | The 3D styles: the first design's egg and the 3D Mii, in Three.js |
+| `src/settings.ts` | Your look, style, name, country and bests, kept in this browser |
 | `src/splash.ts` | Soul-leaving-body splash and GIF export |
 | `src/ui/miimaker.ts` | The Mii Maker |
 | `src/leaderboard.ts` | Leaderboard client: Supabase when live, local API in dev |
