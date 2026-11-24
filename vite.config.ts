@@ -22,12 +22,13 @@ function devServer(): Plugin {
           res.end('saved');
           return;
         }
-        if (req.url === '/__save-shot' && req.method === 'POST') {
-          // dev only: save a render of the egg for marketing pages
+        if (req.url?.startsWith('/__save-shot') && req.method === 'POST') {
+          // dev only: save a render of the egg for marketing pages (?name=style-3d -> marketing/style-3d.png)
+          const name = new URL(req.url, 'http://x').searchParams.get('name')?.replace(/[^a-z0-9-]/g, '') || 'egg-render';
           const chunks: Buffer[] = [];
           for await (const c of req) chunks.push(c as Buffer);
           await mkdir('marketing', { recursive: true });
-          await writeFile('marketing/egg-render.png', Buffer.concat(chunks));
+          await writeFile(`marketing/${name}.png`, Buffer.concat(chunks));
           res.end('saved');
           return;
         }
