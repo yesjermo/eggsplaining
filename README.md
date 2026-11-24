@@ -16,7 +16,6 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Three.js](https://img.shields.io/badge/Three.js-000000?logo=threedotjs&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
-![Blender](https://img.shields.io/badge/Blender-E87D0D?logo=blender&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
 ![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-222222?logo=githubpages&logoColor=white)
 
@@ -78,21 +77,11 @@ The default is a real friend, lovingly egg-ified (`src/shared/look.js`): a low b
 
 ## How she's made
 
-- **Head:** sculpted in **Blender** by a script, `tools/blender/build_head.py`, which exports `public/models/egg-head.glb` (about 445 KB). It has round cheeks with a **Puff** shape key for when she strains, and a button nose. Her hair includes:
-  - a centre-parted, combed cap with a rounded crown
-  - a wrapped low bun with a scrunchie
-  - layered curtain bangs, face-framing tendrils and a few flyaways
-  - darker roots baked into vertex colours, plus a soft sheen in game
-- **Face:** painted **Mii-style** (`src/miiface.ts`) onto a decal that hugs her sculpted face. Every feature runs on smooth values, so expressions ease instead of snapping: blinks close gradually, smiles widen into grins, brows worry by degrees. The same painter draws the Mii Maker thumbnails, the leaderboard avatars and the splash.
-- **Stage:** lightweight **Three.js** with no shadow maps, loaded behind the 2D splash so the first screen is about 16 KB gzipped.
+- **Her:** a flat **cartoon cut-out** with the original Mii face (`src/face2d.ts`). Every part is a flat colour cel with a bold ink outline: back hair, the egg with its outfit band, one shine and one shadow crescent, then her front hair and a centre-parted fringe. Arms, legs and sneakers are drawn on the same canvas (`src/render/egg.ts`), which stands upright in the 3D chamber and squashes, wobbles, jitters and finally keels over. Cheeks puff, cracks spread and her hair stands on end after a pop.
+- **Everywhere else:** the same drawing makes the Mii Maker previews and the leaderboard avatars, so she looks the same on every screen.
+- **Stage:** lightweight **Three.js** with no shadow maps and no model files, loaded behind the 2D splash so the first screen is about 17 KB gzipped.
 - **Leaderboard:** **Supabase**. The tables are locked, and the browser can only call three functions that check every score (see Hosting).
 - **Hosting:** **GitHub Pages**, built by an Action on every push.
-
-Rebuild her head after editing the script. This also renders previews to `tools/blender/preview/`:
-
-```bash
-/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python tools/blender/build_head.py
-```
 
 To regenerate the splash GIF, run `npm run dev`, then open `/?gif=1`. It's written to `marketing/splash.gif` and `public/splash.gif`.
 
@@ -123,8 +112,6 @@ To use your own Supabase project:
 
 For local builds, the same values can go in a git-ignored `.env.production`. With neither set, the game still works with personal bests only.
 
-**Old link:** https://yesjermo.github.io/eggsplaining-site/ redirects here, so links you already shared keep working.
-
 To clear test scores, run this in the Supabase SQL Editor:
 ```sql
 delete from scores where name = 'Setup test';
@@ -139,16 +126,14 @@ delete from scores where name = 'Setup test';
 | `src/game/state.ts` | The rules, for both modes. Pure: time only moves when you call `tick(dt)` |
 | `src/game/holdInput.ts` | Turns keys, touches, cancelled touches and tab switches into press/release |
 | `src/shared/look.js`, `limits.js` | The Mii schema and validation, plus score ceilings shared with the servers |
-| `src/miiface.ts` | Her refined Mii face, driven by a continuous pose |
-| `src/face2d.ts` | 2D egg heads, hair and ghosts for thumbnails, avatars and the splash |
-| `src/render/egg.ts` | Loads the Blender head, paints the face, eases expressions, wobbles, sweats |
+| `src/face2d.ts` | Her Mii face, hair and outlined cartoon cels, plus the sketchy ghost for the splash |
+| `src/render/egg.ts` | The cartoon cut-out in the chamber: expressions, limbs, squash, wobble, sweat, the fall |
 | `src/render/scene.ts` | The chamber, confetti, shell shards, the soul, the camera |
 | `src/splash.ts` | Soul-leaving-body splash and GIF export |
 | `src/ui/miimaker.ts` | The Mii Maker |
 | `src/leaderboard.ts` | Leaderboard client: Supabase when live, local API in dev |
 | `supabase/schema.sql` | The real leaderboard tables and functions |
 | `server/` | Local and self-host leaderboard API |
-| `tools/blender/build_head.py` | Builds her head and hair |
 | `.github/workflows/pages.yml` | Test, build, deploy |
 
 ## Tests
